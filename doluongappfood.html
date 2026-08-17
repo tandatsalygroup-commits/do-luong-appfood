@@ -42,7 +42,6 @@
 
     <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         
-        <!-- Controls Section -->
         <section class="mb-8 flex flex-col md:flex-row gap-4 items-end justify-between bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div class="w-full md:w-1/2">
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Tải lên File Excel Bán Hàng</label>
@@ -70,7 +69,6 @@
             </div>
         </section>
 
-        <!-- Summary Stats -->
         <section id="statsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 hidden">
             <div class="glass-card rounded-2xl p-6 transition-transform hover:-translate-y-1 duration-300">
                 <div class="flex items-center">
@@ -122,7 +120,6 @@
         </section>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Main Chart Area -->
             <section id="chartContainer" class="lg:col-span-2 glass-card rounded-2xl p-6 shadow-sm hidden flex flex-col">
                 <div class="flex justify-between items-center mb-6">
                     <div>
@@ -138,7 +135,6 @@
                 </div>
             </section>
 
-            <!-- AI Insights Area -->
             <section id="aiSection" class="lg:col-span-1 glass-card rounded-2xl p-0 shadow-sm flex flex-col overflow-hidden opacity-50 pointer-events-none transition-opacity duration-500">
                 <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-5 text-white">
                     <h2 class="text-lg font-bold flex items-center">
@@ -163,7 +159,7 @@
         </div>
     </main>
 
-    <!-- Modal Chart Chi Tiết -->
+    <!-- Modal Chart -->
     <div id="detailModal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center z-50 transition-opacity backdrop-blur-sm">
         <div class="bg-white rounded-2xl shadow-2xl p-6 w-[95%] md:w-[600px] relative transform transition-all">
             <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
@@ -180,18 +176,15 @@
         </div>
     </div>
 
-    <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
-        // Global State
         let globalRawData = []; 
         let currentData = [];
         let mainChartInstance = null;
         let detailChartInstance = null;
 
-        // Utilities
         const formatMoney = (amount) => {
             return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
         };
@@ -207,7 +200,6 @@
             else statusEl.classList.add('text-blue-700', 'bg-blue-50', 'border', 'border-blue-200');
         }
 
-        // File Handling
         function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -225,63 +217,54 @@
                     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
                     processExcelData(jsonData);
                 } catch (error) {
-                    console.error(error);
-                    updateStatus("Lỗi khi đọc file. Vui lòng kiểm tra định dạng file.", "error");
+                    updateStatus("Lỗi khi đọc file. Vui lòng kiểm tra định dạng.", "error");
                 }
             };
-            reader.onerror = () => {
-                updateStatus("Đã xảy ra lỗi hệ thống khi đọc file.", "error");
-            }
+            reader.onerror = () => updateStatus("Lỗi hệ thống.", "error");
             reader.readAsArrayBuffer(file);
         }
 
-        // Data Processing - Core logic fix
         function processExcelData(jsonData) {
             currentData = [];
             let headerRowIndex = -1;
             let colMap = { date: -1, item: -1, platform: -1, qty: -1, revenue: -1 };
 
-            // 1. Dò tìm dòng tiêu đề chính xác hơn
+            // Ưu tiên các cột chính xác tuyệt đối (tránh bị ghi đè)
+            const aliases = {
+                item: ['tên hàng', 'tên món', 'tên sản phẩm', 'sản phẩm', 'hàng hóa', 'món', 'tên'],
+                date: ['ngày', 'ngày bán', 'ngày chứng từ', 'ngày tạo', 'thời gian', 'date'],
+                platform: ['nguồn', 'kênh', 'nền tảng', 'đối tác', 'app', 'nguồn đơn'],
+                qty: ['số lượng', 'sl', 'qty', 'số lượng bán'],
+                revenue: ['thành tiền', 'doanh thu', 'tiền hàng', 'thực thu']
+            };
+
             for (let i = 0; i < Math.min(20, jsonData.length); i++) {
                 const row = jsonData[i];
                 if (!row) continue;
-                const rowStr = row.join(' ').toLowerCase();
                 
-                if (rowStr.includes('tên món') || rowStr.includes('hàng hóa') || rowStr.includes('tên hàng') || rowStr.includes('sản phẩm')) {
+                const rowStr = row.map(c => (c || '').toString().toLowerCase().trim());
+                
+                if (rowStr.includes('tên hàng') || rowStr.includes('tên món') || rowStr.includes('sản phẩm') || rowStr.includes('số lượng') || rowStr.includes('thành tiền') || rowStr.includes('thời gian')) {
                     headerRowIndex = i;
-                    row.forEach((col, idx) => {
-                        if (!col) return;
-                        const c = col.toString().toLowerCase().trim();
-                        
-                        // Fix 1: Chặn nhầm "Khách hàng" thành "Tên hàng"
-                        if ((c.includes('hàng') || c.includes('món') || c.includes('sản phẩm') || c === 'tên') && !c.includes('khách') && !c.includes('nhóm') && !c.includes('mã')) {
-                            colMap.item = idx;
+                    
+                    for (let key of Object.keys(aliases)) {
+                        for (let alias of aliases[key]) {
+                            const idx = rowStr.indexOf(alias);
+                            if (idx !== -1) {
+                                colMap[key] = idx;
+                                break; // Tìm thấy thì dừng lại, tuyệt đối không bị đè bởi Ghi Chú hay Giờ
+                            }
                         }
-                        // Fix 2: Bắt chính xác cột "Ngày" hoặc "Ngày bán", bỏ qua cột "Giờ"
-                        else if (c === 'ngày' || c === 'ngày bán' || c === 'ngày chứng từ' || c === 'thời gian') {
-                            colMap.date = idx;
-                        }
-                        else if (c.includes('kênh') || c.includes('nguồn') || c.includes('nền tảng') || c.includes('đối tác') || c.includes('app')) {
-                            colMap.platform = idx;
-                        }
-                        else if (c === 'số lượng' || c === 'sl' || c === 'qty') {
-                            colMap.qty = idx;
-                        }
-                        // Fix 3: Bắt chuẩn cột Thành tiền / Doanh thu
-                        else if (c === 'thành tiền' || c === 'doanh thu' || c === 'tổng tiền' || c === 'thực thu' || c === 'tiền hàng') {
-                            colMap.revenue = idx;
-                        }
-                    });
+                    }
                     break;
                 }
             }
 
             if (headerRowIndex === -1 || colMap.item === -1) {
-                updateStatus("Không tìm thấy cấu trúc cột hợp lệ. File cần có cột: Tên hàng, Số lượng, Thành tiền...", "error");
+                updateStatus("Không tìm thấy cấu trúc cột hợp lệ. File cần: Tên hàng, Số lượng, Thành tiền...", "error");
                 return;
             }
 
-            // 2. Phân tích từng dòng dữ liệu
             for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if (!row || row.length === 0) continue;
@@ -290,11 +273,11 @@
                 let item = colMap.item !== -1 ? row[colMap.item] : '';
                 let platform = colMap.platform !== -1 ? row[colMap.platform] : 'Kênh khác';
                 
-                let rawQty = colMap.qty !== -1 ? row[colMap.qty] : 1;
+                let rawQty = colMap.qty !== -1 ? row[colMap.qty] : 0;
                 let rawRev = colMap.revenue !== -1 ? row[colMap.revenue] : 0;
 
                 if (item && item.toString().trim() !== '') {
-                    // Xử lý ngày tháng định dạng số của Excel
+                    // Chỉnh sửa Ngày tháng (Cắt bỏ Giờ phút nếu dính kèm)
                     if (dateStr && typeof dateStr === 'number') {
                         const excelEpoch = new Date(1899, 11, 30);
                         const d = new Date(excelEpoch.getTime() + dateStr * 86400000);
@@ -302,27 +285,23 @@
                     } else if (!dateStr) {
                         dateStr = 'Không rõ';
                     } else {
-                        // Cắt bỏ phần giờ (13:44:00) nếu có, chỉ lấy phần ngày (VD: 01/08/2026)
-                        dateStr = dateStr.toString().split(' ')[0];
+                        dateStr = dateStr.toString().trim();
+                        if (dateStr.includes(' ')) dateStr = dateStr.split(' ')[0]; // Chỉ lấy phần ngày
                     }
 
-                    // Fix 4: Dọn dẹp số liệu tiền (xóa mọi dấu phẩy, dấu chấm, chữ đ, khoảng trắng) để cộng được
+                    // Chỉnh sửa Số liệu (Xóa bỏ dấu phẩy)
                     let qty = 0;
-                    if (typeof rawQty === 'number') {
-                        qty = rawQty;
-                    } else {
-                        qty = parseFloat(rawQty.toString().replace(/,/g, ''));
-                    }
+                    if (typeof rawQty === 'number') qty = rawQty;
+                    else if (rawQty) qty = parseFloat(rawQty.toString().replace(/,/g, ''));
 
+                    // Chỉnh sửa Tiền tệ (Xóa bỏ dấu, chữ đ, khoảng trắng)
                     let revenue = 0;
-                    if (typeof rawRev === 'number') {
-                        revenue = rawRev;
-                    } else {
-                        // Loại bỏ các ký tự tiền tệ và phân cách hàng nghìn
-                        revenue = parseFloat(rawRev.toString().replace(/[,. \sđ₫]/gi, ''));
-                    }
+                    if (typeof rawRev === 'number') revenue = rawRev;
+                    else if (rawRev) revenue = parseFloat(rawRev.toString().replace(/[,. \sđ₫]/gi, ''));
 
-                    // Chuẩn hóa tên App Giao hàng
+                    // Lọc những dòng trống / ghi chú không liên quan doanh số
+                    if ((isNaN(qty) || qty === 0) && (isNaN(revenue) || revenue === 0)) continue;
+
                     platform = platform ? platform.toString() : 'Kênh khác';
                     const pLower = platform.toLowerCase();
                     if(pLower.includes('grab')) platform = 'Grab';
@@ -353,14 +332,12 @@
             }
         }
 
-        // Filtering
         function populatePlatformFilter() {
             const filterContainer = document.getElementById('filterContainer');
             const select = document.getElementById('platformFilter');
             filterContainer.classList.remove('hidden');
             
             const platforms = [...new Set(globalRawData.map(d => d.platform))].sort();
-            
             select.innerHTML = '<option value="all">Tất cả Nền tảng</option>';
             platforms.forEach(p => {
                 select.innerHTML += `<option value="${p}">${p}</option>`;
@@ -369,21 +346,16 @@
 
         function applyPlatformFilter() {
             const selected = document.getElementById('platformFilter').value;
-            if (selected === 'all') {
-                currentData = [...globalRawData];
-            } else {
-                currentData = globalRawData.filter(d => d.platform === selected); 
-            }
+            if (selected === 'all') currentData = [...globalRawData];
+            else currentData = globalRawData.filter(d => d.platform === selected); 
             renderDashboardAndChart(); 
         }
 
-        // Rendering Core
         function renderDashboardAndChart() {
             document.getElementById('statsContainer').classList.remove('hidden');
             document.getElementById('chartContainer').classList.remove('hidden');
             document.getElementById('aiSection').classList.remove('opacity-50', 'pointer-events-none');
 
-            // Tính toán tổng
             let totalRev = 0, totalItems = 0;
             let platformSales = {}, itemSales = {}, dateSales = {};
 
@@ -399,7 +371,6 @@
                 dateSales[row.date].items.push(row);
             });
 
-            // Update DOM Stats
             document.getElementById('totalRevenue').textContent = formatMoney(totalRev);
             document.getElementById('totalOrders').textContent = totalItems.toLocaleString('vi-VN');
 
@@ -417,7 +388,6 @@
             document.getElementById('bestItem').textContent = bestItem;
             document.getElementById('bestItem').title = bestItem;
 
-            // Chart Data
             const dates = Object.keys(dateSales).sort((a,b) => {
                 const partsA = a.split('/');
                 const partsB = b.split('/');
@@ -455,32 +425,26 @@
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
+                    responsive: true, maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     onClick: (e, activeEls) => {
                         if (activeEls.length > 0) {
                             const dataIndex = activeEls[0].index;
-                            const selectedDate = dates[dataIndex];
-                            showDetailModal(selectedDate, dateSales[selectedDate].items);
+                            showDetailModal(dates[dataIndex], dateSales[dates[dataIndex]].items);
                         }
                     },
                     plugins: {
                         legend: { display: false },
                         tooltip: { 
-                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                            titleFont: { size: 14, family: 'Inter' },
-                            bodyFont: { size: 13, family: 'Inter' },
-                            padding: 12,
-                            cornerRadius: 8,
+                            backgroundColor: 'rgba(17, 24, 39, 0.9)', titleFont: { size: 14, family: 'Inter' },
+                            bodyFont: { size: 13, family: 'Inter' }, padding: 12, cornerRadius: 8,
                             callbacks: { label: (ctx) => ' ' + formatMoney(ctx.raw) } 
                         }
                     },
                     scales: {
                         x: { grid: { display: false, drawBorder: false }, ticks: { font: { family: 'Inter' } } },
                         y: { 
-                            beginAtZero: true,
-                            grid: { borderDash: [5, 5], color: '#e5e7eb', drawBorder: false },
+                            beginAtZero: true, grid: { borderDash: [5, 5], color: '#e5e7eb', drawBorder: false },
                             ticks: { 
                                 font: { family: 'Inter' },
                                 callback: (value) => {
@@ -502,7 +466,6 @@
             `;
         }
 
-        // Modal Chart
         function showDetailModal(date, itemsData) {
             const modal = document.getElementById('detailModal');
             modal.classList.remove('hidden');
@@ -516,9 +479,7 @@
             document.getElementById('modalTitle').textContent = `${date} - ${platformText}`;
 
             let itemQty = {};
-            itemsData.forEach(row => {
-                itemQty[row.item] = (itemQty[row.item] || 0) + row.qty;
-            });
+            itemsData.forEach(row => { itemQty[row.item] = (itemQty[row.item] || 0) + row.qty; });
 
             const sortedItems = Object.entries(itemQty).sort((a,b) => b[1] - a[1]);
             const topItems = sortedItems.slice(0, 5);
@@ -568,7 +529,6 @@
             setTimeout(() => { modal.classList.add('hidden'); }, 200); 
         }
 
-        // Mock AI Analytics
         function analyzeWithAI() {
             if(currentData.length === 0) return;
             const resultDiv = document.getElementById('aiResult');
