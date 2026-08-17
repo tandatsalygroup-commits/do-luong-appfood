@@ -248,7 +248,7 @@
             let headerRowIndex = -1;
             let colMap = { date: -1, item: -1, platform: -1, qty: -1, revenue: -1 };
 
-            // BỘ TỪ KHÓA BỌC THÉP (Sửa lỗi nhận nhầm Tên nhân viên)
+            // BỘ TỪ KHÓA BỌC THÉP
             const aliases = {
                 item: ['tên hàng', 'mã hàng', 'tên món', 'sản phẩm'],
                 date: ['thời gian', 'ngày'],
@@ -264,14 +264,11 @@
                 
                 const rowStr = row.map(c => (c || '').toString().toLowerCase().trim());
                 
-                // Nếu tìm thấy một trong các cột lõi -> Chốt đây là dòng tiêu đề
                 if (rowStr.some(c => c.includes('tên hàng') || c.includes('mã hàng') || c.includes('tổng tiền') || c.includes('thời gian'))) {
                     headerRowIndex = i;
                     
-                    // Quét lấy vị trí từng cột
                     for (let key of Object.keys(aliases)) {
                         if (key === 'revenue') {
-                            // Cột doanh thu ưu tiên quét từ dưới lên để lấy Cột TỔNG TIỀN CUỐI CÙNG
                             for (let c = rowStr.length - 1; c >= 0; c--) {
                                 if (rowStr[c] && aliases[key].some(alias => rowStr[c].includes(alias))) {
                                     colMap[key] = c;
@@ -296,7 +293,6 @@
                 return;
             }
 
-            // Bắt đầu đọc dữ liệu từ sau dòng Header
             for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if (!row || row.length === 0) continue;
@@ -308,10 +304,10 @@
                 let rawQty = colMap.qty !== -1 ? row[colMap.qty] : 0;
                 let rawRev = colMap.revenue !== -1 ? row[colMap.revenue] : 0;
 
-                // Lọc bỏ các dòng Rỗng, Tổng cộng, Khấu trừ
+                // Lọc bỏ dòng Rỗng, Tổng cộng
                 if (!item || item.toString().trim() === '' || item.toString().toLowerCase().includes('tổng cộng') || item === '-') continue;
 
-                // Chuẩn hóa ngày (Xóa giờ phút giây đi kèm)
+                // Chuẩn hóa ngày
                 if (dateStr && typeof dateStr === 'number') {
                     const excelEpoch = new Date(1899, 11, 30);
                     const d = new Date(excelEpoch.getTime() + dateStr * 86400000);
@@ -327,7 +323,10 @@
                 let qty = parseFloat(rawQty) || 0;
                 let revenue = parseCleanMoney(rawRev);
 
-                if (qty === 0 && revenue === 0) continue;
+                // --- BỘ LỌC CẢI TIẾN TRÁNH TRÙNG MÓN (IPOS OPTIONS) ---
+                // Chỉ đếm và vẽ biểu đồ những dòng có PHÁT SINH DOANH THU thực tế.
+                // Loại bỏ tuỳ chọn (Ít ngọt, Nhiều đá) hoặc tên gốc (0đ) để không nhân đôi số lượng món.
+                if (revenue === 0 || isNaN(qty) || qty === 0) continue;
 
                 // Gom nhóm nền tảng F&B
                 platform = platform ? platform.toString() : 'Kênh khác';
@@ -353,7 +352,7 @@
             if (currentData.length === 0) {
                 updateStatus("Không tìm thấy dữ liệu hợp lệ (Các dòng doanh thu đều bằng 0).", "error");
             } else {
-                updateStatus(`Tải thành công ${currentData.length} dòng dữ liệu!`, "success");
+                updateStatus(`Tải thành công ${currentData.length} dòng dữ liệu có doanh thu!`, "success");
                 populatePlatformFilter();
                 renderDashboardAndChart();
             }
