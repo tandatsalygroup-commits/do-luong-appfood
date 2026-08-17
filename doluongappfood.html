@@ -18,6 +18,11 @@
         .stat-icon-bg {
             background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
         }
+        .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col">
@@ -99,7 +104,7 @@
                     <div class="bg-purple-100 p-4 rounded-xl">
                         <i class="fas fa-star text-xl text-purple-600"></i>
                     </div>
-                    <div class="ml-4 overflow-hidden">
+                    <div class="ml-4 overflow-hidden w-full">
                         <p class="text-sm font-medium text-gray-500 uppercase tracking-wide">Món Bán Chạy Nhất</p>
                         <h3 id="bestItem" class="text-lg font-bold text-gray-900 mt-1 truncate" title="-">-</h3>
                     </div>
@@ -111,7 +116,7 @@
                     <div class="bg-orange-100 p-4 rounded-xl">
                         <i class="fas fa-rocket text-xl text-orange-600"></i>
                     </div>
-                    <div class="ml-4 overflow-hidden">
+                    <div class="ml-4 overflow-hidden w-full">
                         <p class="text-sm font-medium text-gray-500 uppercase tracking-wide">Nền Tảng Tốt Nhất</p>
                         <h3 id="bestPlatform" class="text-xl font-bold text-gray-900 mt-1 truncate" title="-">-</h3>
                     </div>
@@ -161,7 +166,7 @@
 
     <!-- Modal Chart -->
     <div id="detailModal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center z-50 transition-opacity backdrop-blur-sm">
-        <div class="bg-white rounded-2xl shadow-2xl p-6 w-[95%] md:w-[600px] relative transform transition-all">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-[95%] md:w-[600px] relative transform transition-all scale-95 opacity-0">
             <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
                 <i class="fas fa-times"></i>
             </button>
@@ -189,12 +194,26 @@
             return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
         };
 
+        // HÀM LÀM SẠCH TIỀN BỌC THÉP
+        function parseCleanMoney(val) {
+            if (!val) return 0;
+            if (typeof val === 'number') return val;
+            let s = val.toString().trim();
+            if (s === '-' || s === '' || s.includes('###')) return 0;
+            // Xóa chữ đ, VNĐ
+            s = s.replace(/[đ₫vn\s]/gi, '');
+            // Xóa số 00 thập phân ở đuôi (.00 hoặc ,00)
+            s = s.replace(/[\.,]\d{1,2}$/, '');
+            // Xóa sạch mọi ký tự không phải số
+            s = s.replace(/[^\d\-]/g, '');
+            return parseInt(s, 10) || 0;
+        }
+
         function updateStatus(message, type="info") {
             const statusEl = document.getElementById('statusMessage');
             statusEl.textContent = message;
-            statusEl.classList.remove('hidden', 'text-red-600', 'text-green-600', 'text-blue-600', 'text-gray-600', 'bg-red-50', 'bg-green-50', 'bg-blue-50', 'p-2', 'rounded');
+            statusEl.className = 'mt-2 text-sm font-medium p-2 rounded transition-opacity block';
             
-            statusEl.classList.add('p-2', 'rounded', 'mt-2');
             if (type === 'error') statusEl.classList.add('text-red-700', 'bg-red-50', 'border', 'border-red-200');
             else if (type === 'success') statusEl.classList.add('text-green-700', 'bg-green-50', 'border', 'border-green-200');
             else statusEl.classList.add('text-blue-700', 'bg-blue-50', 'border', 'border-blue-200');
@@ -229,30 +248,42 @@
             let headerRowIndex = -1;
             let colMap = { date: -1, item: -1, platform: -1, qty: -1, revenue: -1 };
 
-            // Ưu tiên các cột chính xác tuyệt đối (tránh bị ghi đè)
+            // BỘ TỪ KHÓA BỌC THÉP (Sửa lỗi nhận nhầm Tên nhân viên)
             const aliases = {
-                item: ['tên hàng', 'tên món', 'tên sản phẩm', 'sản phẩm', 'hàng hóa', 'món', 'tên'],
-                date: ['ngày', 'ngày bán', 'ngày chứng từ', 'ngày tạo', 'thời gian', 'date'],
-                platform: ['nguồn', 'kênh', 'nền tảng', 'đối tác', 'app', 'nguồn đơn'],
-                qty: ['số lượng', 'sl', 'qty', 'số lượng bán'],
-                revenue: ['thành tiền', 'doanh thu', 'tiền hàng', 'thực thu']
+                item: ['tên hàng', 'mã hàng', 'tên món', 'sản phẩm'],
+                date: ['thời gian', 'ngày'],
+                platform: ['nguồn', 'kênh', 'nền tảng', 'đối tác'],
+                qty: ['số lượng', 'sl', 'qty'],
+                revenue: ['tổng tiền', 'doanh thu', 'thành tiền']
             };
 
+            // Quét để tìm dòng Header (quét 20 dòng đầu)
             for (let i = 0; i < Math.min(20, jsonData.length); i++) {
                 const row = jsonData[i];
                 if (!row) continue;
                 
                 const rowStr = row.map(c => (c || '').toString().toLowerCase().trim());
                 
-                if (rowStr.includes('tên hàng') || rowStr.includes('tên món') || rowStr.includes('sản phẩm') || rowStr.includes('số lượng') || rowStr.includes('thành tiền') || rowStr.includes('thời gian')) {
+                // Nếu tìm thấy một trong các cột lõi -> Chốt đây là dòng tiêu đề
+                if (rowStr.some(c => c.includes('tên hàng') || c.includes('mã hàng') || c.includes('tổng tiền') || c.includes('thời gian'))) {
                     headerRowIndex = i;
                     
+                    // Quét lấy vị trí từng cột
                     for (let key of Object.keys(aliases)) {
-                        for (let alias of aliases[key]) {
-                            const idx = rowStr.indexOf(alias);
-                            if (idx !== -1) {
-                                colMap[key] = idx;
-                                break; // Tìm thấy thì dừng lại, tuyệt đối không bị đè bởi Ghi Chú hay Giờ
+                        if (key === 'revenue') {
+                            // Cột doanh thu ưu tiên quét từ dưới lên để lấy Cột TỔNG TIỀN CUỐI CÙNG
+                            for (let c = rowStr.length - 1; c >= 0; c--) {
+                                if (rowStr[c] && aliases[key].some(alias => rowStr[c].includes(alias))) {
+                                    colMap[key] = c;
+                                    break;
+                                }
+                            }
+                        } else {
+                            for (let c = 0; c < rowStr.length; c++) {
+                                if (rowStr[c] && aliases[key].some(alias => rowStr[c].includes(alias))) {
+                                    colMap[key] = c;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -260,11 +291,12 @@
                 }
             }
 
-            if (headerRowIndex === -1 || colMap.item === -1) {
-                updateStatus("Không tìm thấy cấu trúc cột hợp lệ. File cần: Tên hàng, Số lượng, Thành tiền...", "error");
+            if (headerRowIndex === -1 || colMap.item === -1 || colMap.revenue === -1) {
+                updateStatus("File sai cấu trúc (Thiếu cột 'Tên hàng' hoặc 'Tổng tiền').", "error");
                 return;
             }
 
+            // Bắt đầu đọc dữ liệu từ sau dòng Header
             for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if (!row || row.length === 0) continue;
@@ -276,55 +308,50 @@
                 let rawQty = colMap.qty !== -1 ? row[colMap.qty] : 0;
                 let rawRev = colMap.revenue !== -1 ? row[colMap.revenue] : 0;
 
-                if (item && item.toString().trim() !== '') {
-                    // Chỉnh sửa Ngày tháng (Cắt bỏ Giờ phút nếu dính kèm)
-                    if (dateStr && typeof dateStr === 'number') {
-                        const excelEpoch = new Date(1899, 11, 30);
-                        const d = new Date(excelEpoch.getTime() + dateStr * 86400000);
-                        dateStr = d.toLocaleDateString('vi-VN');
-                    } else if (!dateStr) {
-                        dateStr = 'Không rõ';
-                    } else {
-                        dateStr = dateStr.toString().trim();
-                        if (dateStr.includes(' ')) dateStr = dateStr.split(' ')[0]; // Chỉ lấy phần ngày
-                    }
+                // Lọc bỏ các dòng Rỗng, Tổng cộng, Khấu trừ
+                if (!item || item.toString().trim() === '' || item.toString().toLowerCase().includes('tổng cộng') || item === '-') continue;
 
-                    // Chỉnh sửa Số liệu (Xóa bỏ dấu phẩy)
-                    let qty = 0;
-                    if (typeof rawQty === 'number') qty = rawQty;
-                    else if (rawQty) qty = parseFloat(rawQty.toString().replace(/,/g, ''));
-
-                    // Chỉnh sửa Tiền tệ (Xóa bỏ dấu, chữ đ, khoảng trắng)
-                    let revenue = 0;
-                    if (typeof rawRev === 'number') revenue = rawRev;
-                    else if (rawRev) revenue = parseFloat(rawRev.toString().replace(/[,. \sđ₫]/gi, ''));
-
-                    // Lọc những dòng trống / ghi chú không liên quan doanh số
-                    if ((isNaN(qty) || qty === 0) && (isNaN(revenue) || revenue === 0)) continue;
-
-                    platform = platform ? platform.toString() : 'Kênh khác';
-                    const pLower = platform.toLowerCase();
-                    if(pLower.includes('grab')) platform = 'Grab';
-                    else if(pLower.includes('shopee') || pLower.includes('now')) platform = 'ShopeeFood';
-                    else if(pLower.includes('be') || pLower.includes('baemin')) platform = 'BeFood';
-                    else if(pLower.includes('xanh') || pLower.includes('sm')) platform = 'Xanh SM';
-                    
-                    if (!platform || platform.trim() === '' || platform === '-') platform = 'Kênh khác';
-
-                    currentData.push({ 
-                        date: dateStr, 
-                        item: item.toString().trim(), 
-                        platform: platform, 
-                        qty: isNaN(qty) ? 0 : qty, 
-                        revenue: isNaN(revenue) ? 0 : revenue 
-                    });
+                // Chuẩn hóa ngày (Xóa giờ phút giây đi kèm)
+                if (dateStr && typeof dateStr === 'number') {
+                    const excelEpoch = new Date(1899, 11, 30);
+                    const d = new Date(excelEpoch.getTime() + dateStr * 86400000);
+                    dateStr = d.toLocaleDateString('vi-VN');
+                } else if (!dateStr) {
+                    dateStr = 'Không rõ';
+                } else {
+                    dateStr = dateStr.toString().trim();
+                    if (dateStr.includes(' ')) dateStr = dateStr.split(' ')[0];
                 }
+
+                // Dọn dẹp số lượng & Doanh thu bằng hàm bọc thép
+                let qty = parseFloat(rawQty) || 0;
+                let revenue = parseCleanMoney(rawRev);
+
+                if (qty === 0 && revenue === 0) continue;
+
+                // Gom nhóm nền tảng F&B
+                platform = platform ? platform.toString() : 'Kênh khác';
+                const pLower = platform.toLowerCase();
+                if(pLower.includes('grab')) platform = 'Grab';
+                else if(pLower.includes('shopee') || pLower.includes('now')) platform = 'ShopeeFood';
+                else if(pLower.includes('be') || pLower.includes('baemin')) platform = 'BeFood';
+                else if(pLower.includes('xanh') || pLower.includes('sm')) platform = 'Xanh SM';
+                else if(pLower.includes('tại') || pLower.includes('mang')) platform = 'Offline';
+                else if (!platform || platform.trim() === '' || platform === '-') platform = 'Kênh khác';
+
+                currentData.push({ 
+                    date: dateStr, 
+                    item: item.toString().trim(), 
+                    platform: platform, 
+                    qty: qty, 
+                    revenue: revenue 
+                });
             }
 
             globalRawData = [...currentData]; 
 
             if (currentData.length === 0) {
-                updateStatus("File không chứa dữ liệu hợp lệ sau dòng tiêu đề.", "error");
+                updateStatus("Không tìm thấy dữ liệu hợp lệ (Các dòng doanh thu đều bằng 0).", "error");
             } else {
                 updateStatus(`Tải thành công ${currentData.length} dòng dữ liệu!`, "success");
                 populatePlatformFilter();
@@ -410,7 +437,7 @@
                 data: {
                     labels: dates,
                     datasets: [{
-                        label: 'Doanh thu (VNĐ)',
+                        label: 'Doanh thu',
                         data: revData,
                         borderColor: '#4f46e5',
                         backgroundColor: gradient,
@@ -555,7 +582,7 @@
                             </h4>
                             <p class="text-sm text-gray-600 leading-relaxed">
                                 Đánh giá <strong>${platformText}</strong>, tổng doanh thu đạt <strong>${totalR}</strong>. 
-                                Xu hướng cho thấy sự tăng trưởng tốt vào các ngày cuối tuần. Sản phẩm <strong>"${bestI}"</strong> đóng góp lớn nhất vào lợi nhuận.
+                                Xu hướng cho thấy sự tăng trưởng tốt vào các ngày cuối tuần. Sản phẩm <strong>"${bestI}"</strong> đóng góp lớn nhất vào cấu trúc doanh số.
                             </p>
                         </div>
                         <div class="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 p-4 rounded-lg shadow-sm">
@@ -563,9 +590,9 @@
                                 <i class="fas fa-lightbulb text-yellow-500 mr-2"></i> Đề xuất Hành động
                             </h4>
                             <ul class="list-disc ml-5 text-sm text-green-900 space-y-2">
-                                <li><strong>Upsell:</strong> Tạo combo ăn kèm món "${bestI}" với đồ uống có tỷ suất lợi nhuận cao để tăng giá trị trung bình trên mỗi đơn.</li>
-                                <li><strong>Vận hành:</strong> Chuẩn bị sẵn sàng nguyên liệu dựa trên các đỉnh (peaks) của biểu đồ để giảm thời gian chuẩn bị đơn.</li>
-                                ${selectedPlatform !== 'all' ? `<li><strong>Khuyến mãi:</strong> Chạy flash sale trên ${selectedPlatform} vào các khung giờ thấp điểm để duy trì doanh thu.</li>` : ''}
+                                <li><strong>Upsell:</strong> Tạo combo ăn kèm món "${bestI}" với đồ uống có tỷ suất lợi nhuận cao.</li>
+                                <li><strong>Vận hành:</strong> Chuẩn bị sẵn sàng nguyên liệu dựa trên các đỉnh (peaks) của biểu đồ.</li>
+                                ${selectedPlatform !== 'all' ? `<li><strong>Khuyến mãi:</strong> Chạy flash sale trên kênh ${selectedPlatform} vào giờ thấp điểm để duy trì doanh thu.</li>` : ''}
                             </ul>
                         </div>
                     </div>
@@ -573,12 +600,5 @@
             }, 1800);
         }
     </script>
-    <style>
-        .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-    </style>
 </body>
 </html>
