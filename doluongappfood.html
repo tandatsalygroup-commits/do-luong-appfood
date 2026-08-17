@@ -44,14 +44,13 @@
         
         <!-- Controls Section -->
         <section class="mb-8 flex flex-col md:flex-row gap-4 items-end justify-between bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-            
             <div class="w-full md:w-1/2">
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Tải lên File Excel Bán Hàng</label>
                 <div class="flex items-center space-x-4">
                     <label class="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 px-5 py-2.5 rounded-xl border border-blue-200 font-medium transition-all shadow-sm flex items-center">
                         <i class="fas fa-file-excel mr-2 text-green-600"></i>
                         <span>Chọn file Excel</span>
-                        <input type="file" id="fileUpload" accept=".xlsx, .xls" class="hidden" onchange="handleFileUpload(event)">
+                        <input type="file" id="fileUpload" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)">
                     </label>
                     <span id="fileNameDisplay" class="text-sm text-gray-500 italic flex-1 truncate">Chưa có file nào được chọn</span>
                 </div>
@@ -71,9 +70,8 @@
             </div>
         </section>
 
-        <!-- Summary Stats (Hidden initially) -->
+        <!-- Summary Stats -->
         <section id="statsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 hidden">
-            <!-- Stat 1 -->
             <div class="glass-card rounded-2xl p-6 transition-transform hover:-translate-y-1 duration-300">
                 <div class="flex items-center">
                     <div class="stat-icon-bg p-4 rounded-xl">
@@ -86,7 +84,6 @@
                 </div>
             </div>
             
-            <!-- Stat 2 -->
             <div class="glass-card rounded-2xl p-6 transition-transform hover:-translate-y-1 duration-300">
                 <div class="flex items-center">
                     <div class="bg-green-100 p-4 rounded-xl">
@@ -99,7 +96,6 @@
                 </div>
             </div>
 
-            <!-- Stat 3 -->
             <div class="glass-card rounded-2xl p-6 transition-transform hover:-translate-y-1 duration-300">
                 <div class="flex items-center">
                     <div class="bg-purple-100 p-4 rounded-xl">
@@ -112,7 +108,6 @@
                 </div>
             </div>
 
-            <!-- Stat 4 -->
             <div class="glass-card rounded-2xl p-6 transition-transform hover:-translate-y-1 duration-300">
                 <div class="flex items-center">
                     <div class="bg-orange-100 p-4 rounded-xl">
@@ -231,7 +226,7 @@
                     processExcelData(jsonData);
                 } catch (error) {
                     console.error(error);
-                    updateStatus("Lỗi khi đọc file Excel. Vui lòng kiểm tra định dạng file.", "error");
+                    updateStatus("Lỗi khi đọc file. Vui lòng kiểm tra định dạng file.", "error");
                 }
             };
             reader.onerror = () => {
@@ -240,13 +235,13 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // Data Processing
+        // Data Processing - Core logic fix
         function processExcelData(jsonData) {
             currentData = [];
             let headerRowIndex = -1;
             let colMap = { date: -1, item: -1, platform: -1, qty: -1, revenue: -1 };
 
-            // Find header row robustly
+            // 1. Dò tìm dòng tiêu đề chính xác hơn
             for (let i = 0; i < Math.min(20, jsonData.length); i++) {
                 const row = jsonData[i];
                 if (!row) continue;
@@ -256,23 +251,37 @@
                     headerRowIndex = i;
                     row.forEach((col, idx) => {
                         if (!col) return;
-                        const c = col.toString().toLowerCase();
-                        if (c.includes('ngày') || c.includes('thời gian') || c.includes('giờ')) colMap.date = idx;
-                        else if (c.includes('món') || c.includes('hàng') || c.includes('sản phẩm')) colMap.item = idx;
-                        else if (c.includes('nguồn') || c.includes('kênh') || c.includes('nền tảng') || c.includes('đối tác')) colMap.platform = idx;
-                        else if (c.includes('số lượng') || c.includes('sl')) colMap.qty = idx;
-                        else if (c.includes('doanh thu') || c.includes('thành tiền') || c.includes('tổng tiền') || c.includes('giá trị')) colMap.revenue = idx;
+                        const c = col.toString().toLowerCase().trim();
+                        
+                        // Fix 1: Chặn nhầm "Khách hàng" thành "Tên hàng"
+                        if ((c.includes('hàng') || c.includes('món') || c.includes('sản phẩm') || c === 'tên') && !c.includes('khách') && !c.includes('nhóm') && !c.includes('mã')) {
+                            colMap.item = idx;
+                        }
+                        // Fix 2: Bắt chính xác cột "Ngày" hoặc "Ngày bán", bỏ qua cột "Giờ"
+                        else if (c === 'ngày' || c === 'ngày bán' || c === 'ngày chứng từ' || c === 'thời gian') {
+                            colMap.date = idx;
+                        }
+                        else if (c.includes('kênh') || c.includes('nguồn') || c.includes('nền tảng') || c.includes('đối tác') || c.includes('app')) {
+                            colMap.platform = idx;
+                        }
+                        else if (c === 'số lượng' || c === 'sl' || c === 'qty') {
+                            colMap.qty = idx;
+                        }
+                        // Fix 3: Bắt chuẩn cột Thành tiền / Doanh thu
+                        else if (c === 'thành tiền' || c === 'doanh thu' || c === 'tổng tiền' || c === 'thực thu' || c === 'tiền hàng') {
+                            colMap.revenue = idx;
+                        }
                     });
                     break;
                 }
             }
 
             if (headerRowIndex === -1 || colMap.item === -1) {
-                updateStatus("Không tìm thấy cấu trúc cột hợp lệ. Cần có cột chứa từ khóa: 'Tên món/Hàng hóa'.", "error");
+                updateStatus("Không tìm thấy cấu trúc cột hợp lệ. File cần có cột: Tên hàng, Số lượng, Thành tiền...", "error");
                 return;
             }
 
-            // Parse data rows
+            // 2. Phân tích từng dòng dữ liệu
             for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if (!row || row.length === 0) continue;
@@ -280,10 +289,11 @@
                 let dateStr = colMap.date !== -1 ? row[colMap.date] : 'Không rõ';
                 let item = colMap.item !== -1 ? row[colMap.item] : '';
                 let platform = colMap.platform !== -1 ? row[colMap.platform] : 'Kênh khác';
-                let qty = colMap.qty !== -1 ? parseFloat(row[colMap.qty]) : 1;
-                let revenue = colMap.revenue !== -1 ? parseFloat(row[colMap.revenue]) : 0;
+                
+                let rawQty = colMap.qty !== -1 ? row[colMap.qty] : 1;
+                let rawRev = colMap.revenue !== -1 ? row[colMap.revenue] : 0;
 
-                if (item) {
+                if (item && item.toString().trim() !== '') {
                     // Xử lý ngày tháng định dạng số của Excel
                     if (dateStr && typeof dateStr === 'number') {
                         const excelEpoch = new Date(1899, 11, 30);
@@ -292,10 +302,27 @@
                     } else if (!dateStr) {
                         dateStr = 'Không rõ';
                     } else {
-                        dateStr = dateStr.toString();
+                        // Cắt bỏ phần giờ (13:44:00) nếu có, chỉ lấy phần ngày (VD: 01/08/2026)
+                        dateStr = dateStr.toString().split(' ')[0];
                     }
 
-                    // Chuẩn hóa tên nền tảng cơ bản
+                    // Fix 4: Dọn dẹp số liệu tiền (xóa mọi dấu phẩy, dấu chấm, chữ đ, khoảng trắng) để cộng được
+                    let qty = 0;
+                    if (typeof rawQty === 'number') {
+                        qty = rawQty;
+                    } else {
+                        qty = parseFloat(rawQty.toString().replace(/,/g, ''));
+                    }
+
+                    let revenue = 0;
+                    if (typeof rawRev === 'number') {
+                        revenue = rawRev;
+                    } else {
+                        // Loại bỏ các ký tự tiền tệ và phân cách hàng nghìn
+                        revenue = parseFloat(rawRev.toString().replace(/[,. \sđ₫]/gi, ''));
+                    }
+
+                    // Chuẩn hóa tên App Giao hàng
                     platform = platform ? platform.toString() : 'Kênh khác';
                     const pLower = platform.toLowerCase();
                     if(pLower.includes('grab')) platform = 'Grab';
@@ -307,7 +334,7 @@
 
                     currentData.push({ 
                         date: dateStr, 
-                        item: item.toString(), 
+                        item: item.toString().trim(), 
                         platform: platform, 
                         qty: isNaN(qty) ? 0 : qty, 
                         revenue: isNaN(revenue) ? 0 : revenue 
@@ -352,12 +379,11 @@
 
         // Rendering Core
         function renderDashboardAndChart() {
-            // Show UI Elements
             document.getElementById('statsContainer').classList.remove('hidden');
             document.getElementById('chartContainer').classList.remove('hidden');
             document.getElementById('aiSection').classList.remove('opacity-50', 'pointer-events-none');
 
-            // Calculate Stats
+            // Tính toán tổng
             let totalRev = 0, totalItems = 0;
             let platformSales = {}, itemSales = {}, dateSales = {};
 
@@ -391,7 +417,7 @@
             document.getElementById('bestItem').textContent = bestItem;
             document.getElementById('bestItem').title = bestItem;
 
-            // Prepare Chart Data
+            // Chart Data
             const dates = Object.keys(dateSales).sort((a,b) => {
                 const partsA = a.split('/');
                 const partsB = b.split('/');
@@ -402,14 +428,12 @@
             });
             const revData = dates.map(d => dateSales[d].total);
 
-            // Render Main Line Chart
             const ctx = document.getElementById('mainChart').getContext('2d');
             if (mainChartInstance) mainChartInstance.destroy();
 
-            // Gradient for line chart
             let gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.4)'); // top
-            gradient.addColorStop(1, 'rgba(59, 130, 246, 0)'); // bottom
+            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.4)');
+            gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
 
             mainChartInstance = new Chart(ctx, {
                 type: 'line',
@@ -418,7 +442,7 @@
                     datasets: [{
                         label: 'Doanh thu (VNĐ)',
                         data: revData,
-                        borderColor: '#4f46e5', // indigo-600
+                        borderColor: '#4f46e5',
                         backgroundColor: gradient,
                         borderWidth: 3,
                         pointBackgroundColor: '#ffffff',
@@ -426,19 +450,14 @@
                         pointBorderWidth: 2,
                         pointRadius: 5,
                         pointHoverRadius: 7,
-                        pointHoverBackgroundColor: '#4f46e5',
-                        pointHoverBorderColor: '#fff',
                         fill: true,
-                        tension: 0.4 // smoother curves
+                        tension: 0.4
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
+                    interaction: { mode: 'index', intersect: false },
                     onClick: (e, activeEls) => {
                         if (activeEls.length > 0) {
                             const dataIndex = activeEls[0].index;
@@ -449,7 +468,7 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: { 
-                            backgroundColor: 'rgba(17, 24, 39, 0.9)', // gray-900
+                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
                             titleFont: { size: 14, family: 'Inter' },
                             bodyFont: { size: 13, family: 'Inter' },
                             padding: 12,
@@ -458,13 +477,10 @@
                         }
                     },
                     scales: {
-                        x: {
-                            grid: { display: false, drawBorder: false },
-                            ticks: { font: { family: 'Inter' } }
-                        },
+                        x: { grid: { display: false, drawBorder: false }, ticks: { font: { family: 'Inter' } } },
                         y: { 
                             beginAtZero: true,
-                            grid: { borderDash: [5, 5], color: '#e5e7eb', drawBorder: false }, // gray-200
+                            grid: { borderDash: [5, 5], color: '#e5e7eb', drawBorder: false },
                             ticks: { 
                                 font: { family: 'Inter' },
                                 callback: (value) => {
@@ -478,7 +494,6 @@
                 }
             });
 
-            // Reset AI Output on data change
             document.getElementById('aiResult').innerHTML = `
                 <div class="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center">
                     <i class="fas fa-robot text-4xl mb-3 text-gray-300"></i>
@@ -487,12 +502,10 @@
             `;
         }
 
-        // Modal and Detail Chart
+        // Modal Chart
         function showDetailModal(date, itemsData) {
             const modal = document.getElementById('detailModal');
             modal.classList.remove('hidden');
-            
-            // Allow minimal time for layout before animating
             setTimeout(() => {
                 modal.firstElementChild.classList.add('scale-100', 'opacity-100');
                 modal.firstElementChild.classList.remove('scale-95', 'opacity-0');
@@ -502,13 +515,11 @@
             const platformText = selectedPlatform === 'all' ? 'Tất cả nền tảng' : selectedPlatform;
             document.getElementById('modalTitle').textContent = `${date} - ${platformText}`;
 
-            // Aggregate items
             let itemQty = {};
             itemsData.forEach(row => {
                 itemQty[row.item] = (itemQty[row.item] || 0) + row.qty;
             });
 
-            // Sort and Top 5
             const sortedItems = Object.entries(itemQty).sort((a,b) => b[1] - a[1]);
             const topItems = sortedItems.slice(0, 5);
             const others = sortedItems.slice(5).reduce((sum, item) => sum + item[1], 0);
@@ -526,35 +537,16 @@
                     labels: labels,
                     datasets: [{
                         data: data,
-                        backgroundColor: [
-                            '#4f46e5', // indigo
-                            '#0ea5e9', // sky
-                            '#10b981', // emerald
-                            '#f59e0b', // amber
-                            '#ec4899', // pink
-                            '#9ca3af'  // gray for others
-                        ],
-                        borderWidth: 2,
-                        borderColor: '#ffffff',
-                        hoverOffset: 6
+                        backgroundColor: ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#9ca3af'],
+                        borderWidth: 2, borderColor: '#ffffff', hoverOffset: 6
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '65%',
+                    responsive: true, maintainAspectRatio: false, cutout: '65%',
                     plugins: { 
-                        legend: { 
-                            position: 'right',
-                            labels: {
-                                font: { family: 'Inter', size: 12 },
-                                usePointStyle: true,
-                                padding: 20
-                            }
-                        },
+                        legend: { position: 'right', labels: { font: { family: 'Inter', size: 12 }, usePointStyle: true, padding: 20 } },
                         tooltip: {
-                            backgroundColor: 'rgba(0,0,0,0.8)',
-                            bodyFont: { family: 'Inter', size: 13 },
+                            backgroundColor: 'rgba(0,0,0,0.8)', bodyFont: { family: 'Inter', size: 13 },
                             callbacks: {
                                 label: function(context) {
                                     let label = context.label || '';
@@ -573,15 +565,12 @@
             const modal = document.getElementById('detailModal');
             modal.firstElementChild.classList.remove('scale-100', 'opacity-100');
             modal.firstElementChild.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-            }, 200); // match transition duration
+            setTimeout(() => { modal.classList.add('hidden'); }, 200); 
         }
 
         // Mock AI Analytics
         function analyzeWithAI() {
             if(currentData.length === 0) return;
-
             const resultDiv = document.getElementById('aiResult');
             resultDiv.innerHTML = `
                 <div class="flex flex-col items-center justify-center h-full space-y-4">
@@ -592,8 +581,6 @@
                     <p class="text-sm font-medium text-indigo-700 animate-pulse">AI đang phân tích biểu đồ và xu hướng...</p>
                 </div>
             `;
-
-            // Simulate network delay
             setTimeout(() => {
                 const selectedPlatform = document.getElementById('platformFilter').value;
                 const platformText = selectedPlatform === 'all' ? 'Tổng quát' : `Riêng ${selectedPlatform}`;
@@ -611,7 +598,6 @@
                                 Xu hướng cho thấy sự tăng trưởng tốt vào các ngày cuối tuần. Sản phẩm <strong>"${bestI}"</strong> đóng góp lớn nhất vào lợi nhuận.
                             </p>
                         </div>
-
                         <div class="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 p-4 rounded-lg shadow-sm">
                             <h4 class="text-sm font-bold text-green-800 flex items-center mb-2">
                                 <i class="fas fa-lightbulb text-yellow-500 mr-2"></i> Đề xuất Hành động
@@ -619,7 +605,7 @@
                             <ul class="list-disc ml-5 text-sm text-green-900 space-y-2">
                                 <li><strong>Upsell:</strong> Tạo combo ăn kèm món "${bestI}" với đồ uống có tỷ suất lợi nhuận cao để tăng giá trị trung bình trên mỗi đơn.</li>
                                 <li><strong>Vận hành:</strong> Chuẩn bị sẵn sàng nguyên liệu dựa trên các đỉnh (peaks) của biểu đồ để giảm thời gian chuẩn bị đơn.</li>
-                                ${selectedPlatform !== 'all' ? `<li><strong>Khuyến mãi:</strong> Chạy flash sale trên ${selectedPlatform} vào các khung giờ thấp điểm (đáy biểu đồ) để duy trì doanh thu.</li>` : ''}
+                                ${selectedPlatform !== 'all' ? `<li><strong>Khuyến mãi:</strong> Chạy flash sale trên ${selectedPlatform} vào các khung giờ thấp điểm để duy trì doanh thu.</li>` : ''}
                             </ul>
                         </div>
                     </div>
@@ -628,9 +614,7 @@
         }
     </script>
     <style>
-        .animate-fade-in-up {
-            animation: fadeInUp 0.5s ease-out forwards;
-        }
+        .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
