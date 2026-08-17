@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F&B AI Analytics App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+        }
+        .stat-icon-bg {
+            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased min-h-screen flex flex-col">
+
+    <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center bg-blue-600 text-white p-2 rounded-lg mr-3 shadow-md">
+                        <i class="fas fa-chart-line text-xl"></i>
+                    </div>
+                    <h1 class="text-xl font-bold text-gray-900 tracking-tight">F&B AI Analytics</h1>
+                </div>
+                <div>
+                    <button class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-300">
+                        <i class="fas fa-question-circle mr-2"></i>Hướng dẫn
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        
+        <!-- Controls Section -->
+        <section class="mb-8 flex flex-col md:flex-row gap-4 items-end justify-between bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            
+            <div class="w-full md:w-1/2">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Tải lên File Excel Bán Hàng</label>
+                <div class="flex items-center space-x-4">
+                    <label class="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 px-5 py-2.5 rounded-xl border border-blue-200 font-medium transition-all shadow-sm flex items-center">
+                        <i class="fas fa-file-excel mr-2 text-green-600"></i>
+                        <span>Chọn file Excel</span>
+                        <input type="file" id="fileUpload" accept=".xlsx, .xls" class="hidden" onchange="handleFileUpload(event)">
+                    </label>
+                    <span id="fileNameDisplay" class="text-sm text-gray-500 italic flex-1 truncate">Chưa có file nào được chọn</span>
+                </div>
+                <div id="statusMessage" class="mt-2 text-sm hidden font-medium transition-opacity"></div>
+            </div>
+
+            <div id="filterContainer" class="w-full md:w-1/3 hidden">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Lọc theo nền tảng</label>
+                <div class="relative">
+                    <select id="platformFilter" onchange="applyPlatformFilter()" class="block w-full pl-4 pr-10 py-2.5 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-xl bg-gray-50 appearance-none font-medium text-gray-700 shadow-sm border">
+                        <option value="all">Tất cả Nền tảng</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                        <i class="fas fa-chevron-down text-xs"></i>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary Stats (Hidden initially) -->
+        <section id="statsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 hidden">
+            <!-- Stat 1 -->
+            <div class="glass-card rounded-2xl p-6 transition-transform hover:-translate-y-1 duration-300">
+                <div class="flex items-center">
+                    <div class="stat-icon-bg p-4 rounded-xl">
+                        <i class="fas fa-wallet text-xl text-blue-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500 uppercase tracking-wide">Tổng Doanh Thu</p>
+                        <h3 id="totalRevenue" class="text-2xl font-bold text-gray-900 mt-1">0 ₫</h3>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Stat 2 -->
+            <div class="glass-card rounded-2xl p-6 transition-transform hover:-translate-y-1 duration-300">
+                <div class="flex items-center">
+                    <div class="bg-green-100 p-4 rounded-xl">
+                        <i class="fas fa-shopping-bag text-xl text-green-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500 uppercase tracking-wide">Tổng Số Món Bán</p>
+                        <h3 id="totalOrders" class="text-2xl font-bold text-gray-900 mt-1">0</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat 3 -->
+            <div class="glass-card rounded-2xl p-6 transition-transform hover:-translate-y-1 duration-300">
+                <div class="flex items-center">
+                    <div class="bg-purple-100 p-4 rounded-xl">
+                        <i class="fas fa-star text-xl text-purple-600"></i>
+                    </div>
+                    <div class="ml-4 overflow-hidden">
+                        <p class="text-sm font-medium text-gray-500 uppercase tracking-wide">Món Bán Chạy Nhất</p>
+                        <h3 id="bestItem" class="text-lg font-bold text-gray-900 mt-1 truncate" title="-">-</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat 4 -->
+            <div class="glass-card rounded-2xl p-6 transition-transform hover:-translate-y-1 duration-300">
+                <div class="flex items-center">
+                    <div class="bg-orange-100 p-4 rounded-xl">
+                        <i class="fas fa-rocket text-xl text-orange-600"></i>
+                    </div>
+                    <div class="ml-4 overflow-hidden">
+                        <p class="text-sm font-medium text-gray-500 uppercase tracking-wide">Nền Tảng Tốt Nhất</p>
+                        <h3 id="bestPlatform" class="text-xl font-bold text-gray-900 mt-1 truncate" title="-">-</h3>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Main Chart Area -->
+            <section id="chartContainer" class="lg:col-span-2 glass-card rounded-2xl p-6 shadow-sm hidden flex flex-col">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800">Biểu đồ Doanh Thu Theo Ngày</h2>
+                        <p class="text-xs text-gray-500 mt-1">Nhấp vào một điểm trên biểu đồ để xem chi tiết các món bán được trong ngày đó.</p>
+                    </div>
+                    <div class="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-semibold border border-blue-100">
+                        Drill-down hỗ trợ
+                    </div>
+                </div>
+                <div class="relative h-[350px] w-full flex-grow">
+                    <canvas id="mainChart"></canvas>
+                </div>
+            </section>
+
+            <!-- AI Insights Area -->
+            <section id="aiSection" class="lg:col-span-1 glass-card rounded-2xl p-0 shadow-sm flex flex-col overflow-hidden opacity-50 pointer-events-none transition-opacity duration-500">
+                <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-5 text-white">
+                    <h2 class="text-lg font-bold flex items-center">
+                        <i class="fas fa-sparkles mr-2 text-yellow-300"></i> AI Trợ Lý Phân Tích
+                    </h2>
+                    <p class="text-indigo-100 text-sm mt-1">Phân tích sâu dữ liệu F&B của bạn để tìm ra insights.</p>
+                </div>
+                <div class="p-6 flex-grow flex flex-col">
+                    <div class="mb-4">
+                        <button onclick="analyzeWithAI()" class="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold py-3 px-4 border border-indigo-200 rounded-xl shadow-sm transition-colors flex justify-center items-center group">
+                            <i class="fas fa-magic mr-2 group-hover:animate-pulse"></i> Phân tích dữ liệu hiện tại
+                        </button>
+                    </div>
+                    <div id="aiResult" class="flex-grow bg-gray-50 rounded-xl border border-gray-200 p-4 overflow-y-auto">
+                        <div class="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center">
+                            <i class="fas fa-robot text-4xl mb-3 text-gray-300"></i>
+                            <p>Nhấp vào nút bên trên để AI bắt đầu phân tích biểu đồ và các chỉ số.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal Chart Chi Tiết -->
+    <div id="detailModal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center z-50 transition-opacity backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-[95%] md:w-[600px] relative transform transition-all">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 id="modalTitle" class="text-xl font-bold text-gray-800 mb-1 text-center border-b pb-3">Chi tiết ngày</h3>
+            <p class="text-center text-xs text-gray-500 mb-4">Cơ cấu món ăn được bán (Top 5 & Khác)</p>
+            <div class="relative h-[320px] w-full flex justify-center items-center">
+                <canvas id="detailChart"></canvas>
+            </div>
+            <div class="mt-6 text-center">
+                <button onclick="closeModal()" class="bg-gray-800 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // Global State
+        let globalRawData = []; 
+        let currentData = [];
+        let mainChartInstance = null;
+        let detailChartInstance = null;
+
+        // Utilities
+        const formatMoney = (amount) => {
+            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+        };
+
+        function updateStatus(message, type="info") {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.classList.remove('hidden', 'text-red-600', 'text-green-600', 'text-blue-600', 'text-gray-600', 'bg-red-50', 'bg-green-50', 'bg-blue-50', 'p-2', 'rounded');
+            
+            statusEl.classList.add('p-2', 'rounded', 'mt-2');
+            if (type === 'error') statusEl.classList.add('text-red-700', 'bg-red-50', 'border', 'border-red-200');
+            else if (type === 'success') statusEl.classList.add('text-green-700', 'bg-green-50', 'border', 'border-green-200');
+            else statusEl.classList.add('text-blue-700', 'bg-blue-50', 'border', 'border-blue-200');
+        }
+
+        // File Handling
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            updateStatus("Đang đọc file Excel...", "info");
+            document.getElementById('fileNameDisplay').textContent = file.name;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    processExcelData(jsonData);
+                } catch (error) {
+                    console.error(error);
+                    updateStatus("Lỗi khi đọc file Excel. Vui lòng kiểm tra định dạng file.", "error");
+                }
+            };
+            reader.onerror = () => {
+                updateStatus("Đã xảy ra lỗi hệ thống khi đọc file.", "error");
+            }
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Data Processing
+        function processExcelData(jsonData) {
+            currentData = [];
+            let headerRowIndex = -1;
+            let colMap = { date: -1, item: -1, platform: -1, qty: -1, revenue: -1 };
+
+            // Find header row robustly
+            for (let i = 0; i < Math.min(20, jsonData.length); i++) {
+                const row = jsonData[i];
+                if (!row) continue;
+                const rowStr = row.join(' ').toLowerCase();
+                
+                if (rowStr.includes('tên món') || rowStr.includes('hàng hóa') || rowStr.includes('tên hàng') || rowStr.includes('sản phẩm')) {
+                    headerRowIndex = i;
+                    row.forEach((col, idx) => {
+                        if (!col) return;
+                        const c = col.toString().toLowerCase();
+                        if (c.includes('ngày') || c.includes('thời gian') || c.includes('giờ')) colMap.date = idx;
+                        else if (c.includes('món') || c.includes('hàng') || c.includes('sản phẩm')) colMap.item = idx;
+                        else if (c.includes('nguồn') || c.includes('kênh') || c.includes('nền tảng') || c.includes('đối tác')) colMap.platform = idx;
+                        else if (c.includes('số lượng') || c.includes('sl')) colMap.qty = idx;
+                        else if (c.includes('doanh thu') || c.includes('thành tiền') || c.includes('tổng tiền') || c.includes('giá trị')) colMap.revenue = idx;
+                    });
+                    break;
+                }
+            }
+
+            if (headerRowIndex === -1 || colMap.item === -1) {
+                updateStatus("Không tìm thấy cấu trúc cột hợp lệ. Cần có cột chứa từ khóa: 'Tên món/Hàng hóa'.", "error");
+                return;
+            }
+
+            // Parse data rows
+            for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0) continue;
+
+                let dateStr = colMap.date !== -1 ? row[colMap.date] : 'Không rõ';
+                let item = colMap.item !== -1 ? row[colMap.item] : '';
+                let platform = colMap.platform !== -1 ? row[colMap.platform] : 'Kênh khác';
+                let qty = colMap.qty !== -1 ? parseFloat(row[colMap.qty]) : 1;
+                let revenue = colMap.revenue !== -1 ? parseFloat(row[colMap.revenue]) : 0;
+
+                if (item) {
+                    // Xử lý ngày tháng định dạng số của Excel
+                    if (dateStr && typeof dateStr === 'number') {
+                        const excelEpoch = new Date(1899, 11, 30);
+                        const d = new Date(excelEpoch.getTime() + dateStr * 86400000);
+                        dateStr = d.toLocaleDateString('vi-VN');
+                    } else if (!dateStr) {
+                        dateStr = 'Không rõ';
+                    } else {
+                        dateStr = dateStr.toString();
+                    }
+
+                    // Chuẩn hóa tên nền tảng cơ bản
+                    platform = platform ? platform.toString() : 'Kênh khác';
+                    const pLower = platform.toLowerCase();
+                    if(pLower.includes('grab')) platform = 'Grab';
+                    else if(pLower.includes('shopee') || pLower.includes('now')) platform = 'ShopeeFood';
+                    else if(pLower.includes('be') || pLower.includes('baemin')) platform = 'BeFood';
+                    else if(pLower.includes('xanh') || pLower.includes('sm')) platform = 'Xanh SM';
+                    
+                    if (!platform || platform.trim() === '' || platform === '-') platform = 'Kênh khác';
+
+                    currentData.push({ 
+                        date: dateStr, 
+                        item: item.toString(), 
+                        platform: platform, 
+                        qty: isNaN(qty) ? 0 : qty, 
+                        revenue: isNaN(revenue) ? 0 : revenue 
+                    });
+                }
+            }
+
+            globalRawData = [...currentData]; 
+
+            if (currentData.length === 0) {
+                updateStatus("File không chứa dữ liệu hợp lệ sau dòng tiêu đề.", "error");
+            } else {
+                updateStatus(`Tải thành công ${currentData.length} dòng dữ liệu!`, "success");
+                populatePlatformFilter();
+                renderDashboardAndChart();
+            }
+        }
+
+        // Filtering
+        function populatePlatformFilter() {
+            const filterContainer = document.getElementById('filterContainer');
+            const select = document.getElementById('platformFilter');
+            filterContainer.classList.remove('hidden');
+            
+            const platforms = [...new Set(globalRawData.map(d => d.platform))].sort();
+            
+            select.innerHTML = '<option value="all">Tất cả Nền tảng</option>';
+            platforms.forEach(p => {
+                select.innerHTML += `<option value="${p}">${p}</option>`;
+            });
+        }
+
+        function applyPlatformFilter() {
+            const selected = document.getElementById('platformFilter').value;
+            if (selected === 'all') {
+                currentData = [...globalRawData];
+            } else {
+                currentData = globalRawData.filter(d => d.platform === selected); 
+            }
+            renderDashboardAndChart(); 
+        }
+
+        // Rendering Core
+        function renderDashboardAndChart() {
+            // Show UI Elements
+            document.getElementById('statsContainer').classList.remove('hidden');
+            document.getElementById('chartContainer').classList.remove('hidden');
+            document.getElementById('aiSection').classList.remove('opacity-50', 'pointer-events-none');
+
+            // Calculate Stats
+            let totalRev = 0, totalItems = 0;
+            let platformSales = {}, itemSales = {}, dateSales = {};
+
+            currentData.forEach(row => {
+                totalRev += row.revenue;
+                totalItems += row.qty;
+
+                platformSales[row.platform] = (platformSales[row.platform] || 0) + row.revenue;
+                itemSales[row.item] = (itemSales[row.item] || 0) + row.qty;
+
+                if (!dateSales[row.date]) dateSales[row.date] = { total: 0, items: [] };
+                dateSales[row.date].total += row.revenue;
+                dateSales[row.date].items.push(row);
+            });
+
+            // Update DOM Stats
+            document.getElementById('totalRevenue').textContent = formatMoney(totalRev);
+            document.getElementById('totalOrders').textContent = totalItems.toLocaleString('vi-VN');
+
+            let bestPlatform = '-', maxPRev = 0;
+            for (let p in platformSales) {
+                if (platformSales[p] > maxPRev) { maxPRev = platformSales[p]; bestPlatform = p; }
+            }
+            document.getElementById('bestPlatform').textContent = bestPlatform;
+            document.getElementById('bestPlatform').title = bestPlatform;
+
+            let bestItem = '-', maxIQty = 0;
+            for (let i in itemSales) {
+                if (itemSales[i] > maxIQty) { maxIQty = itemSales[i]; bestItem = i; }
+            }
+            document.getElementById('bestItem').textContent = bestItem;
+            document.getElementById('bestItem').title = bestItem;
+
+            // Prepare Chart Data
+            const dates = Object.keys(dateSales).sort((a,b) => {
+                const partsA = a.split('/');
+                const partsB = b.split('/');
+                if(partsA.length === 3 && partsB.length === 3) {
+                    return new Date(`${partsA[2]}-${partsA[1]}-${partsA[0]}`) - new Date(`${partsB[2]}-${partsB[1]}-${partsB[0]}`);
+                }
+                return a.localeCompare(b);
+            });
+            const revData = dates.map(d => dateSales[d].total);
+
+            // Render Main Line Chart
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            if (mainChartInstance) mainChartInstance.destroy();
+
+            // Gradient for line chart
+            let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.4)'); // top
+            gradient.addColorStop(1, 'rgba(59, 130, 246, 0)'); // bottom
+
+            mainChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Doanh thu (VNĐ)',
+                        data: revData,
+                        borderColor: '#4f46e5', // indigo-600
+                        backgroundColor: gradient,
+                        borderWidth: 3,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#4f46e5',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        pointHoverBackgroundColor: '#4f46e5',
+                        pointHoverBorderColor: '#fff',
+                        fill: true,
+                        tension: 0.4 // smoother curves
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    onClick: (e, activeEls) => {
+                        if (activeEls.length > 0) {
+                            const dataIndex = activeEls[0].index;
+                            const selectedDate = dates[dataIndex];
+                            showDetailModal(selectedDate, dateSales[selectedDate].items);
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { 
+                            backgroundColor: 'rgba(17, 24, 39, 0.9)', // gray-900
+                            titleFont: { size: 14, family: 'Inter' },
+                            bodyFont: { size: 13, family: 'Inter' },
+                            padding: 12,
+                            cornerRadius: 8,
+                            callbacks: { label: (ctx) => ' ' + formatMoney(ctx.raw) } 
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false, drawBorder: false },
+                            ticks: { font: { family: 'Inter' } }
+                        },
+                        y: { 
+                            beginAtZero: true,
+                            grid: { borderDash: [5, 5], color: '#e5e7eb', drawBorder: false }, // gray-200
+                            ticks: { 
+                                font: { family: 'Inter' },
+                                callback: (value) => {
+                                    if(value >= 1000000) return (value / 1000000) + 'Tr';
+                                    if(value >= 1000) return (value / 1000) + 'K';
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Reset AI Output on data change
+            document.getElementById('aiResult').innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center">
+                    <i class="fas fa-robot text-4xl mb-3 text-gray-300"></i>
+                    <p>Dữ liệu đã thay đổi. Nhấp vào nút bên trên để AI bắt đầu phân tích biểu đồ và các chỉ số.</p>
+                </div>
+            `;
+        }
+
+        // Modal and Detail Chart
+        function showDetailModal(date, itemsData) {
+            const modal = document.getElementById('detailModal');
+            modal.classList.remove('hidden');
+            
+            // Allow minimal time for layout before animating
+            setTimeout(() => {
+                modal.firstElementChild.classList.add('scale-100', 'opacity-100');
+                modal.firstElementChild.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+
+            const selectedPlatform = document.getElementById('platformFilter').value;
+            const platformText = selectedPlatform === 'all' ? 'Tất cả nền tảng' : selectedPlatform;
+            document.getElementById('modalTitle').textContent = `${date} - ${platformText}`;
+
+            // Aggregate items
+            let itemQty = {};
+            itemsData.forEach(row => {
+                itemQty[row.item] = (itemQty[row.item] || 0) + row.qty;
+            });
+
+            // Sort and Top 5
+            const sortedItems = Object.entries(itemQty).sort((a,b) => b[1] - a[1]);
+            const topItems = sortedItems.slice(0, 5);
+            const others = sortedItems.slice(5).reduce((sum, item) => sum + item[1], 0);
+            if (others > 0) topItems.push(['Các món khác', others]);
+
+            const labels = topItems.map(i => i[0]);
+            const data = topItems.map(i => i[1]);
+
+            const ctx = document.getElementById('detailChart').getContext('2d');
+            if (detailChartInstance) detailChartInstance.destroy();
+
+            detailChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: [
+                            '#4f46e5', // indigo
+                            '#0ea5e9', // sky
+                            '#10b981', // emerald
+                            '#f59e0b', // amber
+                            '#ec4899', // pink
+                            '#9ca3af'  // gray for others
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: { 
+                        legend: { 
+                            position: 'right',
+                            labels: {
+                                font: { family: 'Inter', size: 12 },
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            bodyFont: { family: 'Inter', size: 13 },
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed !== null) label += context.parsed + ' phần';
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('detailModal');
+            modal.firstElementChild.classList.remove('scale-100', 'opacity-100');
+            modal.firstElementChild.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200); // match transition duration
+        }
+
+        // Mock AI Analytics
+        function analyzeWithAI() {
+            if(currentData.length === 0) return;
+
+            const resultDiv = document.getElementById('aiResult');
+            resultDiv.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full space-y-4">
+                    <div class="relative">
+                        <i class="fas fa-circle-notch fa-spin text-4xl text-indigo-500 relative z-10"></i>
+                        <div class="absolute inset-0 bg-indigo-100 rounded-full animate-ping opacity-75"></div>
+                    </div>
+                    <p class="text-sm font-medium text-indigo-700 animate-pulse">AI đang phân tích biểu đồ và xu hướng...</p>
+                </div>
+            `;
+
+            // Simulate network delay
+            setTimeout(() => {
+                const selectedPlatform = document.getElementById('platformFilter').value;
+                const platformText = selectedPlatform === 'all' ? 'Tổng quát' : `Riêng ${selectedPlatform}`;
+                const bestI = document.getElementById('bestItem').textContent;
+                const totalR = document.getElementById('totalRevenue').textContent;
+
+                resultDiv.innerHTML = `
+                    <div class="space-y-4 animate-fade-in-up">
+                        <div class="bg-white border-l-4 border-indigo-500 p-4 rounded-lg shadow-sm">
+                            <h4 class="text-sm font-bold text-gray-800 flex items-center mb-2">
+                                <i class="fas fa-chart-pie text-indigo-500 mr-2"></i> Tổng quan Hiệu suất
+                            </h4>
+                            <p class="text-sm text-gray-600 leading-relaxed">
+                                Đánh giá <strong>${platformText}</strong>, tổng doanh thu đạt <strong>${totalR}</strong>. 
+                                Xu hướng cho thấy sự tăng trưởng tốt vào các ngày cuối tuần. Sản phẩm <strong>"${bestI}"</strong> đóng góp lớn nhất vào lợi nhuận.
+                            </p>
+                        </div>
+
+                        <div class="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 p-4 rounded-lg shadow-sm">
+                            <h4 class="text-sm font-bold text-green-800 flex items-center mb-2">
+                                <i class="fas fa-lightbulb text-yellow-500 mr-2"></i> Đề xuất Hành động
+                            </h4>
+                            <ul class="list-disc ml-5 text-sm text-green-900 space-y-2">
+                                <li><strong>Upsell:</strong> Tạo combo ăn kèm món "${bestI}" với đồ uống có tỷ suất lợi nhuận cao để tăng giá trị trung bình trên mỗi đơn.</li>
+                                <li><strong>Vận hành:</strong> Chuẩn bị sẵn sàng nguyên liệu dựa trên các đỉnh (peaks) của biểu đồ để giảm thời gian chuẩn bị đơn.</li>
+                                ${selectedPlatform !== 'all' ? `<li><strong>Khuyến mãi:</strong> Chạy flash sale trên ${selectedPlatform} vào các khung giờ thấp điểm (đáy biểu đồ) để duy trì doanh thu.</li>` : ''}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            }, 1800);
+        }
+    </script>
+    <style>
+        .animate-fade-in-up {
+            animation: fadeInUp 0.5s ease-out forwards;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</body>
+</html>
