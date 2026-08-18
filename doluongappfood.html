@@ -143,7 +143,7 @@
             </div>
         </section>
 
-        <!-- BOM (CÔNG THỨC & TIÊU HAO) SECTION -->
+        <!-- BOM SECTION -->
         <section id="bomSection" class="glass-card border-t-4 border-t-green-500 rounded-2xl p-6 shadow-sm flex flex-col mb-8 hidden">
             <div class="flex justify-between items-center mb-6">
                 <div>
@@ -337,7 +337,11 @@
 
         function normalizeForMatch(str) {
             if (!str) return '';
-            return String(str).normalize('NFC').toLowerCase().replace(/[-_.,()]/g, ' ').replace(/\s+/g, ' ').trim();
+            // Xóa dấu tiếng Việt, đưa về chữ thường, xóa khoảng trắng thừa và ký tự đặc biệt
+            let s = String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            s = s.replace(/đ/g, 'd');
+            s = s.replace(/[-_.,()]/g, ' ').replace(/\s+/g, ' ').trim();
+            return s;
         }
 
         // ==========================================
@@ -795,7 +799,7 @@
                             const clickedItemsData = dateSales[clickedDate].items;
                             showHourlyChartAndTable(clickedDate, clickedItemsData);
                             
-                            // Gọi hàm BOM cho ngày được chọn (Tính tiêu hao riêng cho ngày đó)
+                            // Gọi hàm BOM cho ngày được chọn
                             if(bomDatabase.length > 0) calculateUsage(clickedItemsData, clickedDate);
                         }
                     },
@@ -934,19 +938,23 @@
         }
 
         // ==========================================
-        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM)
+        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM) CHỐNG LỖI SPARSE ARRAY
         // ==========================================
         async function fetchBOM() {
-            if(currentData.length === 0) return; // Silent if no data
+            if(currentData.length === 0) return; 
             
             const link = document.getElementById('bomLinkInput').value.trim();
             if(!link) return;
             
-            const match = link.match(/\/d\/([a-zA-Z0-9-_]+)/);
-            if(!match) return updateBomStatus("Link Google Sheet không hợp lệ!", "error");
+            const idMatch = link.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            if(!idMatch) return updateBomStatus("Link Google Sheet không hợp lệ!", "error");
             
-            const id = match[1];
-            const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`;
+            // Xử lý cứng việc tìm gid nếu có, để luôn load đúng trang Định lượng
+            const gidMatch = link.match(/[#&]gid=([0-9]+)/);
+            let url = `https://docs.google.com/spreadsheets/d/${idMatch[1]}/gviz/tq?tqx=out:csv`;
+            if (gidMatch) {
+                url += `&gid=${gidMatch[1]}`;
+            }
             
             try {
                 updateBomStatus("Đang tải dữ liệu định lượng từ Google Sheet...", "info");
@@ -954,7 +962,6 @@
                 if(!res.ok) throw new Error("Không thể truy cập file (Hãy đảm bảo Sheet đang ở chế độ 'Bất kỳ ai có liên kết')");
                 
                 const csvText = await res.text();
-                // Bảo vệ chống parse nhầm trang HTML đăng nhập
                 if (safeIncludes(csvText, '<html')) throw new Error("Link không hợp lệ (Vui lòng kiểm tra quyền chia sẻ).");
 
                 const workbook = XLSX.read(csvText, {type: 'string'});
@@ -973,12 +980,12 @@
             let headerRow = -1;
             let colItem=-1, colIng=-1, colUnit=-1, colS=-1, colM=-1, colL=-1, colQty=-1, colSize=-1;
             
-            // Quét an toàn chống hố đen (Sparse Array) của Google Sheet
             for(let i=0; i<Math.min(20, data.length); i++) {
                 const row = data[i];
                 if(!row || !Array.isArray(row)) continue;
                 
-                const rowStr = row.map(c => c == null ? '' : String(c).toLowerCase().trim());
+                // Dùng Array.from để lấp đầy hố đen bằng ô trống ''
+                const rowStr = Array.from(row).map(c => c == null ? '' : String(c).toLowerCase().trim());
                 
                 if(rowStr.some(c => safeIncludes(c, 'món') || safeIncludes(c, 'sản phẩm'))) {
                     headerRow = i;
@@ -1097,7 +1104,7 @@
             let sortedUsage = Object.values(usageMap).sort((a,b) => b.qty - a.qty);
             
             if(sortedUsage.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500 italic">Chưa có dữ liệu tiêu hao (Gợi ý: Kiểm tra lỗi đánh máy, khác biệt font chữ, hoặc định dạng số lượng trong file định lượng "0,05" thay vì "0.05").</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500 italic">Chưa có dữ liệu tiêu hao (Gợi ý: Kiểm tra lỗi đánh máy giữa file định lượng và iPOS).</td></tr>`;
                 document.getElementById('bomTitle').innerHTML = `<i class="fas fa-boxes text-gray-400 mr-2"></i> Không có dữ liệu - Ngày ${dateStr}`;
                 return;
             }
