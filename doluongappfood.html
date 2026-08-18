@@ -335,17 +335,18 @@
             return parseFloat(s) || 0;
         }
 
+        // --- BỌC THÉP TỐI ĐA: LỘT TRẦN TIẾNG VIỆT, XÓA KHOẢNG TRẮNG, DẤU NGOẶC ---
         function normalizeForMatch(str) {
             if (!str) return '';
-            // Xóa dấu tiếng Việt, đưa về chữ thường, xóa khoảng trắng thừa và ký tự đặc biệt
-            let s = String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-            s = s.replace(/đ/g, 'd');
-            s = s.replace(/[-_.,()]/g, ' ').replace(/\s+/g, ' ').trim();
-            return s;
+            let s = String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); // Xóa dấu tiếng Việt
+            s = s.replace(/đ/g, 'd'); // Xóa chữ đ đặc biệt
+            s = s.replace(/[-_.,()]/g, ''); // Xóa tất cả dấu câu và ngoặc
+            s = s.replace(/\s+/g, ''); // XÓA TOÀN BỘ KHOẢNG TRẮNG ĐỂ ÉP CHUẨN MỌI LỖI ĐÁNH MÁY
+            return s.trim();
         }
 
         // ==========================================
-        // KHỐI LOGIC AI CHATBOT
+        // KHỐI LOGIC AI CHATBOT (ĐÃ TỐI ƯU HÓA PROMPT TRÁNH QUÁ TẢI)
         // ==========================================
         function openApiModal() {
             document.getElementById('apiKeyInput').value = localStorage.getItem('gemini_api_key') || '';
@@ -437,25 +438,25 @@
                 hourSales[row.hour] = (hourSales[row.hour] || 0) + row.qty;
             });
 
-            const topItems = Object.entries(itemSales).sort((a,b) => b[1] - a[1]).slice(0, 10).map(i => `${i[0]} (${i[1]} ly)`).join(", ");
-            const worstItems = Object.entries(itemSales).sort((a,b) => a[1] - b[1]).slice(0, 5).map(i => `${i[0]} (${i[1]} ly)`).join(", ");
+            // CHỈ GỬI LÊN TOP 5 ĐỂ TRÁNH QUÁ TẢI API (Nhanh và nhẹ hơn)
+            const topItems = Object.entries(itemSales).sort((a,b) => b[1] - a[1]).slice(0, 5).map(i => `${i[0]} (${i[1]})`).join(", ");
+            const worstItems = Object.entries(itemSales).sort((a,b) => a[1] - b[1]).slice(0, 3).map(i => `${i[0]} (${i[1]})`).join(", ");
             
             const sortedHours = Object.entries(hourSales).sort((a,b) => b[1] - a[1]);
             const peakHours = sortedHours.slice(0, 3).map(h => `${h[0]}h`).join(", ");
             const slowHours = sortedHours.slice(-3).map(h => `${h[0]}h`).join(", ");
 
             const platformFilter = document.getElementById('platformFilter').value;
-            const scope = platformFilter === 'all' ? 'Tất cả nền tảng' : `Kênh ${platformFilter}`;
+            const scope = platformFilter === 'all' ? 'Tổng quát' : `Kênh ${platformFilter}`;
 
-            let context = `Dưới đây là dữ liệu kinh doanh F&B của cửa hàng tôi đang chọn:\n`;
-            context += `- Nguồn dữ liệu: ${scope}\n`;
-            context += `- Tổng doanh thu: ${formatMoney(totalRev)}\n`;
-            context += `- Tổng số ly/món bán ra: ${totalItems}\n`;
-            context += `- Danh sách 10 món bán chạy nhất: ${topItems}\n`;
-            context += `- Các món bán ế nhất: ${worstItems}\n`;
-            context += `- Khung giờ vàng (đông khách nhất): ${peakHours}\n`;
-            context += `- Khung giờ vắng khách nhất: ${slowHours}\n\n`;
-            context += `Hãy đóng vai trò là một chuyên gia quản lý F&B xuất sắc. Trả lời các câu hỏi của tôi dựa trên dữ liệu trên. Trình bày đẹp, có gạch đầu dòng, ngôn từ chuyên nghiệp và thực dụng. Không cần nhắc lại bạn là ai.`;
+            let context = `Dữ liệu F&B (${scope}):\n`;
+            context += `- Doanh thu: ${formatMoney(totalRev)}\n`;
+            context += `- Số món bán ra: ${totalItems}\n`;
+            context += `- Top 5 món bán chạy: ${topItems}\n`;
+            context += `- Top 3 món bán chậm: ${worstItems}\n`;
+            context += `- Giờ cao điểm: ${peakHours}\n`;
+            context += `- Giờ vắng khách: ${slowHours}\n\n`;
+            context += `Trợ lý chuyên gia F&B: Phân tích ngắn gọn, sắc bén, gạch đầu dòng rõ ràng.`;
             return context;
         }
 
@@ -474,9 +475,11 @@
             let contents = [];
             
             if (chatHistory.length === 0) {
-                contents.push({ role: "user", parts: [{ text: systemContext + "\n\nCâu hỏi của tôi: " + userText }]});
+                contents.push({ role: "user", parts: [{ text: systemContext + "\n\nUser: " + userText }]});
             } else {
-                contents = chatHistory.map(msg => ({
+                // Giới hạn chỉ gửi 4 tin nhắn gần nhất để tránh bị dội dung lượng API
+                const recentHistory = chatHistory.slice(-4);
+                contents = recentHistory.map(msg => ({
                     role: msg.role === 'user' ? 'user' : 'model',
                     parts: [{ text: msg.text }]
                 }));
@@ -497,15 +500,18 @@
 
                 if (response.ok) {
                     const aiResponseText = result.candidates[0].content.parts[0].text;
-                    chatHistory.push({ role: 'user', text: chatHistory.length === 0 ? systemContext + "\n\n" + userText : userText });
+                    chatHistory.push({ role: 'user', text: userText });
                     chatHistory.push({ role: 'ai', text: aiResponseText });
                     appendMessage('ai', aiResponseText);
                 } else {
+                    console.log(result);
                     if(result.error && safeIncludes(result.error.message, "API key not valid")) {
                         appendMessage('ai', "❌ API Key của bạn không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra lại trong phần Cài đặt AI.");
                         localStorage.removeItem('gemini_api_key');
+                    } else if(result.error && safeIncludes(result.error.message, "quota")) {
+                        appendMessage('ai', "❌ Bạn đã gửi quá nhiều yêu cầu trong thời gian ngắn (Lỗi Quota API miễn phí). Hãy đợi một chút rồi thử lại nhé.");
                     } else {
-                        appendMessage('ai', "❌ Đã có lỗi xảy ra từ máy chủ Google. Vui lòng thử lại sau.");
+                        appendMessage('ai', "❌ Đã có lỗi xảy ra từ máy chủ Google. Chi tiết: " + (result.error ? result.error.message : "Không rõ."));
                     }
                 }
             } catch (error) {
@@ -524,7 +530,7 @@
         function autoAnalyzeWithAI() {
             if (currentData.length === 0) return;
             clearChat();
-            const prompt = "Dựa vào bối cảnh dữ liệu trên, hãy viết một báo cáo tóm tắt nhanh hiệu quả kinh doanh và đề xuất ngay 3 hành động cụ thể để cải thiện doanh thu cho ngày mai.";
+            const prompt = "Hãy viết một báo cáo phân tích hiệu quả kinh doanh nhanh gọn và đề xuất ngay 3 hành động cụ thể để cải thiện doanh thu (Upsell, Vận hành, Khuyến mãi).";
             callGeminiAPI(prompt);
         }
 
@@ -593,7 +599,7 @@
                 const row = jsonData[i];
                 if (!row || !Array.isArray(row)) continue;
                 
-                const rowStr = row.map(c => c == null ? '' : String(c).toLowerCase().trim());
+                const rowStr = Array.from(row).map(c => c == null ? '' : String(c).toLowerCase().trim());
                 if (rowStr.some(c => safeIncludes(c, 'tên hàng') || safeIncludes(c, 'mã hàng') || safeIncludes(c, 'tổng tiền') || safeIncludes(c, 'thời gian'))) {
                     headerRowIndex = i;
                     colMap.item = rowStr.findIndex(c => c === 'tên hàng' || c === 'tên món' || c === 'sản phẩm');
@@ -725,7 +731,7 @@
             hideHourlyChart();
             renderDashboardAndChart(); 
             clearChat();
-            if(bomDatabase.length > 0) calculateUsage(); // Tính lại BOM theo All
+            if(bomDatabase.length > 0) calculateUsage(); 
         }
 
         function renderDashboardAndChart() {
@@ -799,7 +805,6 @@
                             const clickedItemsData = dateSales[clickedDate].items;
                             showHourlyChartAndTable(clickedDate, clickedItemsData);
                             
-                            // Gọi hàm BOM cho ngày được chọn
                             if(bomDatabase.length > 0) calculateUsage(clickedItemsData, clickedDate);
                         }
                     },
@@ -938,7 +943,7 @@
         }
 
         // ==========================================
-        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM) CHỐNG LỖI SPARSE ARRAY
+        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM)
         // ==========================================
         async function fetchBOM() {
             if(currentData.length === 0) return; 
@@ -980,11 +985,11 @@
             let headerRow = -1;
             let colItem=-1, colIng=-1, colUnit=-1, colS=-1, colM=-1, colL=-1, colQty=-1, colSize=-1;
             
+            // BỌC THÉP TRÁNH LỖI UNDEFINED KHI CÓ Ô TRỐNG TRONG GG SHEET
             for(let i=0; i<Math.min(20, data.length); i++) {
                 const row = data[i];
                 if(!row || !Array.isArray(row)) continue;
                 
-                // Dùng Array.from để lấp đầy hố đen bằng ô trống ''
                 const rowStr = Array.from(row).map(c => c == null ? '' : String(c).toLowerCase().trim());
                 
                 if(rowStr.some(c => safeIncludes(c, 'món') || safeIncludes(c, 'sản phẩm'))) {
