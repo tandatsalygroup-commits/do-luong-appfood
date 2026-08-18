@@ -161,7 +161,6 @@
             <div id="bomStatusMessage" class="text-sm mb-4 font-medium transition-opacity hidden"></div>
             
             <div id="bomResultContainer" class="hidden border-t border-gray-200 pt-6 mt-2">
-                <!-- Khu vực cảnh báo thông minh -->
                 <div id="bomMissingWarning" class="mb-4"></div>
                 
                 <h3 id="bomTitle" class="text-md font-bold text-gray-800 mb-4 flex items-center">
@@ -330,20 +329,21 @@
             return String(str).toLowerCase().includes(String(search).toLowerCase());
         }
 
-        // TÍNH ĐỊNH LƯỢNG CHO NHỮNG TRƯỜNG HỢP NHƯ "2-3 LÁ"
+        // BỘ CẮT LỌC ĐỊNH LƯỢNG SIÊU CHUẨN
         function parseVietnameseFloat(val) {
             if (val === undefined || val === null || val === '') return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim().toLowerCase();
             
-            // Nếu là dạng khoảng "2-3" -> Lấy trung bình cộng = 2.5
+            // Xử lý thông minh dạng "2-3 lá" -> Lấy số trung bình 2.5
             let rangeMatch = str.match(/^(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)/);
             if (rangeMatch) {
-                let min = parseFloat(rangeMatch[1].replace(',', '.'));
-                let max = parseFloat(rangeMatch[2].replace(',', '.'));
+                let min = parseVietnameseFloat(rangeMatch[1]);
+                let max = parseVietnameseFloat(rangeMatch[2]);
                 return (min + max) / 2;
             }
             
+            // Xử lý lỗi thư viện parse số 52,5 -> 525 của tiếng Mỹ
             let s = str.replace(/\s/g, '');
             if (s.includes(',') && s.includes('.')) {
                 if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
@@ -358,14 +358,51 @@
             return parseFloat(s) || 0;
         }
 
-        // ÉP KHÔ TOÀN BỘ KÝ TỰ ĐỂ KHỚP 100% CẢ IPOS VÀ GOOGLE SHEET
         function normalizeForMatch(str) {
             if (!str) return '';
             let s = String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); 
             s = s.replace(/đ/g, 'd'); 
-            if (s.startsWith('topping ')) s = s.substring(8); // Tự động xóa chữ topping của iPOS
-            s = s.replace(/[^a-z0-9]/g, ''); // Bóp nát mọi khoảng trắng và dấu câu
+            if (s.startsWith('topping ')) s = s.substring(8); 
+            s = s.replace(/[^a-z0-9]/g, ''); 
             return s.trim();
+        }
+
+        // ==========================================
+        // CÔNG CỤ ĐỌC CSV NGUYÊN BẢN (KHÔNG BỊ LỖI THƯ VIỆN ĐỔI SỐ)
+        // ==========================================
+        function parseCSV(csvText) {
+            let lines = [];
+            let currentLine = [];
+            let currentCell = '';
+            let insideQuote = false;
+            
+            for (let i = 0; i < csvText.length; i++) {
+                let c = csvText[i];
+                if (c === '"') {
+                    if (insideQuote && csvText[i+1] === '"') {
+                        currentCell += '"';
+                        i++; 
+                    } else {
+                        insideQuote = !insideQuote;
+                    }
+                } else if (c === ',' && !insideQuote) {
+                    currentLine.push(currentCell);
+                    currentCell = '';
+                } else if ((c === '\n' || c === '\r') && !insideQuote) {
+                    if (c === '\r' && csvText[i+1] === '\n') i++; 
+                    currentLine.push(currentCell);
+                    lines.push(currentLine);
+                    currentLine = [];
+                    currentCell = '';
+                } else {
+                    currentCell += c;
+                }
+            }
+            if (currentCell !== '' || currentLine.length > 0) {
+                currentLine.push(currentCell);
+                lines.push(currentLine);
+            }
+            return lines;
         }
 
         // ==========================================
@@ -461,7 +498,6 @@
                 hourSales[row.hour] = (hourSales[row.hour] || 0) + row.qty;
             });
 
-            // TỐI ƯU HÓA NGỮ CẢNH: Rút gọn chỉ số để tránh bị lỗi Quota Limit của Google AI
             const topItems = Object.entries(itemSales).sort((a,b) => b[1] - a[1]).slice(0, 5).map(i => `${i[0]} (${i[1]})`).join(", ");
             const worstItems = Object.entries(itemSales).sort((a,b) => a[1] - b[1]).slice(0, 3).map(i => `${i[0]} (${i[1]})`).join(", ");
             
@@ -726,7 +762,6 @@
                 populatePlatformFilter();
                 renderDashboardAndChart();
                 
-                // TỰ ĐỘNG TRIGGER BOM FETCH
                 if (bomDatabase.length === 0) {
                     fetchBOM();
                 } else {
@@ -826,7 +861,6 @@
                             const clickedItemsData = dateSales[clickedDate].items;
                             showHourlyChartAndTable(clickedDate, clickedItemsData);
                             
-                            // Gọi hàm BOM cho ngày được chọn
                             if(bomDatabase.length > 0) calculateUsage(clickedItemsData, clickedDate);
                         }
                     },
@@ -965,7 +999,7 @@
         }
 
         // ==========================================
-        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM) KIÊN CỐ 3 TẦNG
+        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM) ĐỌC MA TRẬN SHEETJS
         // ==========================================
         async function fetchBOM() {
             if(currentData.length === 0) return; 
@@ -990,10 +1024,8 @@
                 const csvText = await res.text();
                 if (safeIncludes(csvText, '<html')) throw new Error("Link không hợp lệ (Vui lòng kiểm tra quyền chia sẻ).");
 
-                const workbook = XLSX.read(csvText, {type: 'string'});
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(sheet, {header: 1});
-                
+                // BỌC THÉP TRÁNH BỊ CSV CỦA GOOGLE ĐỔI DẤU PHẨY VN (52,5 -> 525) BẰNG CUSTOM PARSER
+                const jsonData = parseCSV(csvText);
                 parseBOMData(jsonData);
             } catch(err) {
                 updateBomStatus("Lỗi tải định lượng: " + err.message, "error");
@@ -1004,22 +1036,28 @@
             if(data.length < 2) return updateBomStatus("File định lượng trống!", "error");
             
             let headerRowIndex = -1;
-            let colItem=-1, colIng=-1, colUnit=-1, colS=-1, colM=-1, colL=-1, colQty=-1, colSize=-1;
+            let colItem=-1, colIng=-1, colUnit=-1, colS=-1, colM=-1, colL=-1, colQty=-1;
             
-            // TẦNG 1: TÌM CỘT TÊN MÓN VÀ NGUYÊN LIỆU (Định vị Hàng Header)
             for(let i=0; i<Math.min(20, data.length); i++) {
                 const row = data[i];
-                if(!row || typeof row !== 'object') continue;
+                if(!row || !Array.isArray(row)) continue;
                 
                 const rowStr = Array.from(row).map(c => c == null ? '' : String(c).toLowerCase().trim());
                 
-                if(rowStr.some(c => c === 'tên món' || c === 'tên hàng' || c === 'sản phẩm')) {
+                // Khóa mục tiêu bằng cách quét cả dòng xem có chữ TÊN MÓN và TÊN NGUYÊN LIỆU không
+                let isHeader = rowStr.some(c => c === 'tên món' || c === 'tên sản phẩm' || c === 'tên hàng' || c.includes('tên món'));
+                
+                if(isHeader) {
                     headerRowIndex = i;
-                    colItem = rowStr.findIndex(c => c === 'tên món' || c === 'tên hàng' || c === 'sản phẩm');
-                    if (colItem === -1) colItem = rowStr.findIndex(c => (c.includes('tên') || c.includes('món') || c.includes('hàng')) && !c.includes('nguyên'));
-
-                    colIng = rowStr.findIndex(c => c === 'tên nguyên liệu' || c === 'nguyên liệu' || c === 'thành phần' || c === 'vật tư');
-                    if (colIng === -1) colIng = rowStr.findIndex(c => c.includes('nguyên liệu') || c.includes('thành phần') || c.includes('vật tư'));
+                    colItem = rowStr.findIndex(c => c === 'tên món' || c === 'tên hàng' || c === 'sản phẩm' || c.includes('tên món'));
+                    colIng = rowStr.findIndex(c => c === 'tên nguyên liệu' || c === 'nguyên liệu' || c.includes('nguyên liệu') || c.includes('thành phần'));
+                    
+                    // Quét ngay trên dòng Header này để tìm Size
+                    colS = rowStr.findIndex(c => c === 's' || c === 'size s' || c.includes('size s') || c.includes('(s)'));
+                    colM = rowStr.findIndex(c => c === 'm' || c === 'size m' || c.includes('size m') || c.includes('(m)'));
+                    colL = rowStr.findIndex(c => c === 'l' || c === 'size l' || c.includes('size l') || c.includes('(l)'));
+                    colQty = rowStr.findIndex(c => c === 'định lượng' || c === 'số lượng' || c === 'sl');
+                    colUnit = rowStr.findIndex(c => c === 'đvt' || c === 'đơn vị' || c.includes('đơn vị'));
                     break;
                 }
             }
@@ -1028,59 +1066,25 @@
                 return updateBomStatus("Cấu trúc file định lượng không đúng (Cần cột Tên món, Tên nguyên liệu).", "error");
             }
 
-            // TẦNG 2: TÌM CỘT SIZE/ĐỊNH LƯỢNG (Quét sâu xuống 2 dòng bên dưới header để tìm vì có thể bị Merge Cells)
-            for (let offset = 0; offset <= 2; offset++) {
-                let rIdx = headerRowIndex + offset;
-                if (rIdx >= data.length) break;
-                
-                let row = data[rIdx];
-                if (!row || typeof row !== 'object') continue;
-                let rStr = Array.from(row).map(c => c == null ? '' : String(c).toLowerCase().trim());
-                
-                // SO SÁNH TUYỆT ĐỐI KHÔNG DÙNG INCLUDES ĐỂ TRÁNH NHẦM LẪN CHỮ "MÓN" VỚI CHỮ "M"
-                rStr.forEach((cell, cIdx) => {
-                    if (!cell) return;
-                    
-                    if (colUnit === -1 && (cell === 'đvt' || cell === 'đơn vị' || cell === 'đơn vị tính')) colUnit = cIdx;
-                    
-                    if (colS === -1 && (cell === 's' || cell === '(s)' || cell === 'size s' || cell.includes('size s ('))) colS = cIdx;
-                    if (colM === -1 && (cell === 'm' || cell === '(m)' || cell === 'size m' || cell.includes('size m ('))) colM = cIdx;
-                    if (colL === -1 && (cell === 'l' || cell === '(l)' || cell === 'size l' || cell.includes('size l ('))) colL = cIdx;
-                    
-                    if (colQty === -1 && (cell === 'định lượng' || cell === 'định mức' || cell === 'số lượng' || cell === 'qty' || cell === 'đl')) colQty = cIdx;
-                    if (colSize === -1 && (cell === 'size' || cell === 'kích cỡ')) colSize = cIdx;
-                });
+            // KẾ SÁCH THÔNG MINH CHO CỘT ĐƠN VỊ TÍNH (NẾU BỊ ẨN TIÊU ĐỀ DO MERGE CELLS NHƯ TRONG HÌNH)
+            if (colUnit === -1) {
+                // Nếu cột S nằm sau cột Nguyên liệu 2 ô (Ví dụ: Cột C là NL, Cột E là Size S), vậy Cột D ở giữa 100% là cột Đơn Vị Tính
+                if (colS > colIng + 1) colUnit = colIng + 1;
+                // Nếu không có size S nhưng có cột định lượng chung
+                else if (colQty > colIng + 1) colUnit = colIng + 1;
             }
 
-            // TẦNG 3: NẾU KHÔNG CÓ TIÊU ĐỀ, TỰ ĐỘNG CHỐT CỘT NẰM CẠNH
-            if (colUnit === -1 && colIng !== -1 && colS > colIng + 1) {
-                colUnit = colIng + 1; // Cột đơn vị thường nằm giữa Nguyên Liệu và Size S
-            }
-            // Nếu không có bất kỳ cột Size hay Định lượng nào, lấy cột sát bên phải Đơn vị làm cột Định lượng chung
-            if (colS === -1 && colM === -1 && colL === -1 && colQty === -1) {
-                colQty = colUnit !== -1 ? colUnit + 1 : colIng + 1;
-            }
-            
             bomDatabase = [];
             let currentItemName = '';
             
             for(let i=headerRowIndex+1; i<data.length; i++) {
                 const row = data[i];
-                if(!row || typeof row !== 'object') continue;
+                if(!row || !Array.isArray(row)) continue;
                 
                 let itemName = row[colItem] ? String(row[colItem]).trim() : '';
                 if(itemName) currentItemName = itemName; 
                 else itemName = currentItemName; 
                 
-                let bomBaseName = itemName;
-                let bomSpecificSize = colSize !== -1 && row[colSize] ? String(row[colSize]).trim().toUpperCase() : '';
-                
-                const bomSizeMatch = bomBaseName.match(/\s*\((S|M|L)\)$/i);
-                if (bomSizeMatch) {
-                    if(!bomSpecificSize) bomSpecificSize = bomSizeMatch[1].toUpperCase();
-                    bomBaseName = bomBaseName.replace(/\s*\((S|M|L)\)$/i, '').trim();
-                }
-
                 let ingredient = row[colIng] ? String(row[colIng]).trim() : '';
                 let unit = colUnit !== -1 && row[colUnit] ? String(row[colUnit]).trim() : '';
                 
@@ -1093,12 +1097,10 @@
                 
                 bomDatabase.push({
                     item: itemName,
-                    baseItem: bomBaseName,
                     ingredient: ingredient,
                     unit: unit,
                     s: qtyS, m: qtyM, l: qtyL,
-                    defaultQty: defaultQty,
-                    specificSize: bomSpecificSize
+                    defaultQty: defaultQty
                 });
             }
             
@@ -1112,7 +1114,6 @@
             document.getElementById('bomResultContainer').classList.remove('hidden');
             let usageMap = {}; 
             let missingRecipes = new Set();
-            let missingQty = new Set();
             
             let itemQty = {};
             itemsData.forEach(sale => {
@@ -1122,12 +1123,12 @@
             });
             
             Object.values(itemQty).forEach(sale => {
-                let baseNameNorm = normalizeForMatch(sale.baseItem);
+                let baseNameNorm = normalizeForMatch(sale.baseItem); // Đã bị lột sạch dấu và chữ topping
                 let size = sale.size; 
                 let qtySold = sale.qty;
                 
                 let recipes = bomDatabase.filter(b => {
-                    let bNorm = normalizeForMatch(b.baseItem);
+                    let bNorm = normalizeForMatch(b.item);
                     if (!bNorm) return false;
                     return baseNameNorm === bNorm || safeIncludes(baseNameNorm, bNorm) || safeIncludes(bNorm, baseNameNorm);
                 });
@@ -1137,18 +1138,12 @@
                 } else {
                     let hasMatchedSize = false;
                     recipes.forEach(r => {
-                        if (r.specificSize && r.specificSize !== size && size !== 'KHÔNG GHI RÕ') return;
-
                         let qtyToUse = 0;
-                        if(r.specificSize) {
-                            qtyToUse = r.defaultQty;
-                        } else {
-                            if(size === 'S' && r.s > 0) qtyToUse = r.s;
-                            else if(size === 'M' && r.m > 0) qtyToUse = r.m;
-                            else if(size === 'L' && r.l > 0) qtyToUse = r.l;
-                            else if(r.defaultQty > 0) qtyToUse = r.defaultQty; 
-                            else qtyToUse = r.m > 0 ? r.m : (r.s > 0 ? r.s : r.l); 
-                        }
+                        if(size === 'S' && r.s > 0) qtyToUse = r.s;
+                        else if(size === 'M' && r.m > 0) qtyToUse = r.m;
+                        else if(size === 'L' && r.l > 0) qtyToUse = r.l;
+                        else if(r.defaultQty > 0) qtyToUse = r.defaultQty; 
+                        else qtyToUse = r.m > 0 ? r.m : (r.s > 0 ? r.s : r.l); 
                         
                         if(qtyToUse > 0) {
                             hasMatchedSize = true;
@@ -1159,7 +1154,7 @@
                     });
                     
                     if (!hasMatchedSize) {
-                        missingQty.add(sale.baseItem + ` (Định lượng ${size === 'KHÔNG GHI RÕ' ? 'chung' : size} = 0)`);
+                        missingRecipes.add(sale.baseItem + " (Có tên nhưng định lượng = 0)");
                     }
                 }
             });
@@ -1169,19 +1164,19 @@
             tbody.innerHTML = '';
             warningBox.innerHTML = '';
             
-            let allMissing = Array.from(missingRecipes).concat(Array.from(missingQty));
-            if(allMissing.length > 0) {
+            if(missingRecipes.size > 0) {
+                let missingList = Array.from(missingRecipes).join(', ');
                 warningBox.innerHTML = `
                     <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-md text-sm text-yellow-800 shadow-sm mb-4">
-                        <strong class="font-bold"><i class="fas fa-exclamation-triangle mr-1"></i> Cảnh báo: Có ${allMissing.length} món lọt lưới:</strong><br>
-                        <span class="text-xs leading-relaxed mt-1 block">${allMissing.join(', ')}</span>
+                        <strong class="font-bold"><i class="fas fa-exclamation-triangle mr-1"></i> Cảnh báo: Có ${missingRecipes.size} món lọt lưới (Chưa có công thức hoặc sai tên):</strong><br>
+                        <span class="text-xs leading-relaxed mt-1 block">${missingList}</span>
                     </div>`;
             }
 
             let sortedUsage = Object.values(usageMap).sort((a,b) => b.qty - a.qty);
             
             if(sortedUsage.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500 italic">Chưa có dữ liệu tiêu hao. Vui lòng kiểm tra lại file Định Lượng.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500 italic">Chưa có dữ liệu tiêu hao.</td></tr>`;
                 document.getElementById('bomTitle').innerHTML = `<i class="fas fa-boxes text-gray-400 mr-2"></i> Không có dữ liệu - Ngày ${dateStr}`;
                 return;
             }
@@ -1189,10 +1184,12 @@
             document.getElementById('bomTitle').innerHTML = `<i class="fas fa-boxes text-orange-500 mr-2"></i> Tổng Tiêu Hao Nguyên Liệu - Ngày ${dateStr}`;
             
             sortedUsage.forEach(u => {
+                // Tùy chỉnh format thông minh: Nếu có số lẻ mới hiện, nếu nguyên thì bỏ luôn .00 cho gọn
+                let qtyFormatted = parseFloat(u.qty.toFixed(3)).toLocaleString('vi-VN');
                 tbody.innerHTML += `
                     <tr class="hover:bg-green-50 transition-colors">
                         <td class="px-4 py-3 font-medium text-gray-800">${u.name}</td>
-                        <td class="px-4 py-3 text-right font-bold text-green-600 text-base">${parseFloat(u.qty.toFixed(3)).toLocaleString('vi-VN')}</td>
+                        <td class="px-4 py-3 text-right font-bold text-green-600 text-base">${qtyFormatted}</td>
                         <td class="px-4 py-3 text-center text-gray-500">${u.unit}</td>
                     </tr>
                 `;
