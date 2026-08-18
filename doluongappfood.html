@@ -153,9 +153,10 @@
             </div>
             
             <div class="flex flex-col sm:flex-row items-center gap-4 mb-2">
-                <input type="text" id="bomLinkInput" placeholder="Dán link Google Sheet Định lượng (Chứa thành phần S, M, L) vào đây..." class="flex-grow w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm outline-none bg-gray-50">
+                <!-- Đã hardcode link trực tiếp vào thuộc tính value -->
+                <input type="text" id="bomLinkInput" value="https://docs.google.com/spreadsheets/d/1x1DpN2vZmXXvOt66UQy4XxbOiybQxy8pHHj4NqdpAXE/edit?gid=589025939#gid=589025939" class="flex-grow w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm outline-none bg-gray-50 text-gray-500" readonly>
                 <button onclick="fetchBOM()" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition shadow-md whitespace-nowrap flex items-center justify-center">
-                    <i class="fas fa-sync-alt mr-2"></i>Kết nối Định lượng
+                    <i class="fas fa-sync-alt mr-2"></i>Tải lại Định lượng
                 </button>
             </div>
             <div id="bomStatusMessage" class="text-sm mb-4 font-medium transition-opacity hidden"></div>
@@ -174,7 +175,6 @@
                             </tr>
                         </thead>
                         <tbody id="bomTableBody" class="bg-white divide-y divide-gray-100 text-sm">
-                            <!-- Dữ liệu BOM đổ vào đây -->
                         </tbody>
                     </table>
                 </div>
@@ -323,10 +323,22 @@
             return parseInt(s, 10) || 0;
         }
 
+        // --- BỌC THÉP: CHUYỂN ĐỔI SỐ LƯỢNG ĐỊNH LƯỢNG (DẤU PHẨY VN) ---
+        function parseVietnameseFloat(val) {
+            if (val === undefined || val === null || val === '') return 0;
+            if (typeof val === 'number') return val;
+            let s = val.toString().trim().replace(/,/g, '.').replace(/[^\d.-]/g, '');
+            return parseFloat(s) || 0;
+        }
+
+        // --- BỌC THÉP: CHUẨN HÓA UNICODE TIẾNG VIỆT ---
         function normalizeForMatch(str) {
-            return str.toLowerCase()
-                      .replace(/[-_.,()]/g, ' ') // Xóa các ký tự đặc biệt, dấu ngoặc
-                      .replace(/\s+/g, ' ')
+            if (!str) return '';
+            return str.toString()
+                      .normalize('NFC') 
+                      .toLowerCase()
+                      .replace(/[-_.,()]/g, ' ') 
+                      .replace(/\s+/g, ' ') 
                       .trim();
         }
 
@@ -683,6 +695,13 @@
                 updateStatus(`Đọc chuẩn xác ${currentData.length} dòng dữ liệu thực tế!`, "success");
                 populatePlatformFilter();
                 renderDashboardAndChart();
+                
+                // --- TỰ ĐỘNG TẢI DỮ LIỆU ĐỊNH LƯỢNG NGAY KHI UPLOAD FILE XONG ---
+                if (bomDatabase.length === 0) {
+                    fetchBOM();
+                } else {
+                    calculateUsage();
+                }
             }
         }
 
@@ -718,7 +737,7 @@
                 totalRev += row.revenue;
                 totalItems += row.qty;
                 platformSales[row.platform] = (platformSales[row.platform] || 0) + row.revenue;
-                itemSales[row.baseItem] = (itemSales[row.baseItem] || 0) + row.qty; 
+                itemSales[row.item] = (itemSales[row.item] || 0) + row.qty; 
 
                 if (!dateSales[row.date]) dateSales[row.date] = { total: 0, items: [] };
                 dateSales[row.date].total += row.revenue;
@@ -776,7 +795,8 @@
                             const clickedDate = dates[dataIndex];
                             const clickedItemsData = dateSales[clickedDate].items;
                             showHourlyChartAndTable(clickedDate, clickedItemsData);
-                            // Gọi hàm BOM cho ngày được chọn
+                            
+                            // Gọi hàm BOM cho ngày được chọn (Tính tiêu hao riêng cho ngày đó)
                             if(bomDatabase.length > 0) calculateUsage(clickedItemsData, clickedDate);
                         }
                     },
@@ -911,20 +931,20 @@
 
         function hideHourlyChart() {
             document.getElementById('hourlyChartContainer').classList.add('hidden');
-            if(bomDatabase.length > 0) calculateUsage(); // Khôi phục tính tổng BOM
+            if(bomDatabase.length > 0) calculateUsage(); // Tính lại tổng tất cả các ngày
         }
 
         // ==========================================
-        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM) - DYNAMIC CHART LINKED
+        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM)
         // ==========================================
         async function fetchBOM() {
-            if(currentData.length === 0) return alert("Vui lòng tải File Bán Hàng iPOS trước khi kết nối định lượng!");
+            if(currentData.length === 0) return; // Silent if no data
             
             const link = document.getElementById('bomLinkInput').value.trim();
-            if(!link) return alert("Vui lòng nhập link Google Sheet!");
+            if(!link) return;
             
             const match = link.match(/\/d\/([a-zA-Z0-9-_]+)/);
-            if(!match) return alert("Link Google Sheet không hợp lệ!");
+            if(!match) return updateBomStatus("Link Google Sheet không hợp lệ!", "error");
             
             const id = match[1];
             const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`;
@@ -958,15 +978,15 @@
                 
                 if(rowStr.some(c => c.includes('món') || c.includes('sản phẩm'))) {
                     headerRow = i;
-                    colItem = rowStr.findIndex(c => c.includes('món') || c.includes('sản phẩm') || c.includes('tên'));
-                    colIng = rowStr.findIndex(c => c.includes('nguyên liệu') || c.includes('thành phần'));
-                    colUnit = rowStr.findIndex(c => c === 'đơn vị' || c === 'đvt');
+                    colItem = rowStr.findIndex(c => c === 'tên món' || c === 'tên hàng' || c === 'sản phẩm' || c.includes('món') || c.includes('sản phẩm') || c.includes('tên'));
+                    colIng = rowStr.findIndex(c => c.includes('nguyên liệu') || c.includes('thành phần') || c.includes('vật tư'));
+                    colUnit = rowStr.findIndex(c => c === 'đơn vị' || c === 'đvt' || c.includes('đơn vị'));
                     
-                    colS = rowStr.findIndex(c => c === 'size s' || c === 's' || c === 'định lượng s');
-                    colM = rowStr.findIndex(c => c === 'size m' || c === 'm' || c === 'định lượng m');
-                    colL = rowStr.findIndex(c => c === 'size l' || c === 'l' || c === 'định lượng l');
+                    colS = rowStr.findIndex(c => c === 's' || c === 'size s' || c.includes('(s)') || c.includes('định lượng s') || c.includes('đl s'));
+                    colM = rowStr.findIndex(c => c === 'm' || c === 'size m' || c.includes('(m)') || c.includes('định lượng m') || c.includes('đl m'));
+                    colL = rowStr.findIndex(c => c === 'l' || c === 'size l' || c.includes('(l)') || c.includes('định lượng l') || c.includes('đl l'));
                     
-                    colQty = rowStr.findIndex(c => c === 'định lượng' || c === 'số lượng');
+                    colQty = rowStr.findIndex(c => c.includes('định lượng') || c.includes('số lượng') || c.includes('sl') || c.includes('qty') || c.includes('đl'));
                     colSize = rowStr.findIndex(c => c === 'size' || c === 'kích cỡ');
                     break;
                 }
@@ -987,39 +1007,46 @@
                 if(itemName) currentItemName = itemName; 
                 else itemName = currentItemName; 
                 
+                let bomBaseName = itemName;
+                let bomSpecificSize = colSize !== -1 && row[colSize] ? row[colSize].toString().trim().toUpperCase() : '';
+                
+                const bomSizeMatch = bomBaseName.match(/\s*\((S|M|L)\)$/i);
+                if (bomSizeMatch) {
+                    if(!bomSpecificSize) bomSpecificSize = bomSizeMatch[1].toUpperCase();
+                    bomBaseName = bomBaseName.replace(/\s*\((S|M|L)\)$/i, '').trim();
+                }
+
                 let ingredient = row[colIng] ? row[colIng].toString().trim() : '';
                 let unit = colUnit !== -1 && row[colUnit] ? row[colUnit].toString().trim() : '';
                 
                 if(!ingredient) continue;
                 
-                let qtyS = colS !== -1 ? parseFloat(row[colS]) || 0 : 0;
-                let qtyM = colM !== -1 ? parseFloat(row[colM]) || 0 : 0;
-                let qtyL = colL !== -1 ? parseFloat(row[colL]) || 0 : 0;
-                let defaultQty = colQty !== -1 ? parseFloat(row[colQty]) || 0 : 0;
-                let specificSize = colSize !== -1 && row[colSize] ? row[colSize].toString().trim().toUpperCase() : '';
+                let qtyS = colS !== -1 ? parseVietnameseFloat(row[colS]) : 0;
+                let qtyM = colM !== -1 ? parseVietnameseFloat(row[colM]) : 0;
+                let qtyL = colL !== -1 ? parseVietnameseFloat(row[colL]) : 0;
+                let defaultQty = colQty !== -1 ? parseVietnameseFloat(row[colQty]) : 0;
                 
                 bomDatabase.push({
                     item: itemName,
+                    baseItem: bomBaseName,
                     ingredient: ingredient,
                     unit: unit,
                     s: qtyS, m: qtyM, l: qtyL,
                     defaultQty: defaultQty,
-                    specificSize: specificSize
+                    specificSize: bomSpecificSize
                 });
             }
             
             updateBomStatus(`Đã tải định lượng thành công cho ${new Set(bomDatabase.map(b=>b.item)).size} món!`, "success");
-            calculateUsage(); // Tính lần đầu cho all
+            calculateUsage(); 
         }
 
-        // HÀM TÍNH TOÁN BOM DỰA VÀO BẢNG XẾP HẠNG NGÀY ĐƯỢC CHỌN
         function calculateUsage(itemsData = currentData, dateStr = "Tất cả các ngày") {
             if(!itemsData || itemsData.length === 0 || bomDatabase.length === 0) return;
             
             document.getElementById('bomResultContainer').classList.remove('hidden');
             let usageMap = {}; 
             
-            // Gom nhóm lại theo từng Món Gốc + Size trước khi nhân (như Bảng Xếp Hạng)
             let itemQty = {};
             itemsData.forEach(sale => {
                 let key = sale.baseItem + '|' + sale.size;
@@ -1032,17 +1059,18 @@
                 let size = sale.size; 
                 let qtySold = sale.qty;
                 
-                // Lọc các công thức (Cải tiến cơ chế tìm kiếm tên món bằng Normalize)
                 let recipes = bomDatabase.filter(b => {
-                    let bNorm = normalizeForMatch(b.item);
+                    let bNorm = normalizeForMatch(b.baseItem);
                     if (!bNorm) return false;
                     return baseNameNorm === bNorm || baseNameNorm.includes(bNorm) || bNorm.includes(baseNameNorm);
                 });
                 
                 recipes.forEach(r => {
+                    if (r.specificSize && r.specificSize !== size && size !== 'KHÔNG GHI RÕ') return;
+
                     let qtyToUse = 0;
                     if(r.specificSize) {
-                        if(r.specificSize === size) qtyToUse = r.defaultQty;
+                        qtyToUse = r.defaultQty;
                     } else {
                         if(size === 'S' && r.s > 0) qtyToUse = r.s;
                         else if(size === 'M' && r.m > 0) qtyToUse = r.m;
@@ -1065,12 +1093,11 @@
             let sortedUsage = Object.values(usageMap).sort((a,b) => b.qty - a.qty);
             
             if(sortedUsage.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500 italic">Chưa có dữ liệu tiêu hao (Tên món bán ra và tên trong file Định lượng không khớp nhau).</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500 italic">Chưa có dữ liệu tiêu hao (Gợi ý: Kiểm tra lỗi đánh máy, khác biệt font chữ, hoặc định dạng số lượng trong file định lượng "0,05" thay vì "0.05").</td></tr>`;
                 document.getElementById('bomTitle').innerHTML = `<i class="fas fa-boxes text-gray-400 mr-2"></i> Không có dữ liệu - Ngày ${dateStr}`;
                 return;
             }
 
-            // Đổi tiêu đề động theo ngày đang click
             document.getElementById('bomTitle').innerHTML = `<i class="fas fa-boxes text-orange-500 mr-2"></i> Tổng Tiêu Hao Nguyên Liệu - Ngày ${dateStr}`;
             
             sortedUsage.forEach(u => {
