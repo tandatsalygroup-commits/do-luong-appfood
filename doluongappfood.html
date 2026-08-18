@@ -143,7 +143,7 @@
             </div>
         </section>
 
-        <!-- BOM SECTION -->
+        <!-- BOM (CÔNG THỨC & TIÊU HAO) SECTION -->
         <section id="bomSection" class="glass-card border-t-4 border-t-green-500 rounded-2xl p-6 shadow-sm flex flex-col mb-8 hidden">
             <div class="flex justify-between items-center mb-6">
                 <div>
@@ -322,22 +322,22 @@
             return parseInt(s, 10) || 0;
         }
 
-        // BỌC THÉP CHỐNG LỖI SPARSE ARRAY
+        // HÀM AN TOÀN CHỐNG LỖI UNDEFINED CỦA TRÌNH DUYỆT
+        function safeIncludes(str, search) {
+            if (str === null || str === undefined) return false;
+            return String(str).toLowerCase().includes(String(search).toLowerCase());
+        }
+
         function parseVietnameseFloat(val) {
             if (val === undefined || val === null || val === '') return 0;
             if (typeof val === 'number') return val;
-            let s = val.toString().trim().replace(/,/g, '.').replace(/[^\d.-]/g, '');
+            let s = String(val).trim().replace(/,/g, '.').replace(/[^\d.-]/g, '');
             return parseFloat(s) || 0;
         }
 
         function normalizeForMatch(str) {
             if (!str) return '';
-            return str.toString()
-                      .normalize('NFC') 
-                      .toLowerCase()
-                      .replace(/[-_.,()]/g, ' ') 
-                      .replace(/\s+/g, ' ') 
-                      .trim();
+            return String(str).normalize('NFC').toLowerCase().replace(/[-_.,()]/g, ' ').replace(/\s+/g, ' ').trim();
         }
 
         // ==========================================
@@ -497,7 +497,7 @@
                     chatHistory.push({ role: 'ai', text: aiResponseText });
                     appendMessage('ai', aiResponseText);
                 } else {
-                    if(result.error && result.error.message.includes("API key not valid")) {
+                    if(result.error && safeIncludes(result.error.message, "API key not valid")) {
                         appendMessage('ai', "❌ API Key của bạn không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra lại trong phần Cài đặt AI.");
                         localStorage.removeItem('gemini_api_key');
                     } else {
@@ -587,22 +587,21 @@
 
             for (let i = 0; i < Math.min(20, jsonData.length); i++) {
                 const row = jsonData[i];
-                if (!row) continue;
-                // BỌC THÉP CHỐNG LỖI ARRAY HOLE (SPARSE ARRAY) TỪ SHEETJS
-                const rowStr = Array.from(row).map(c => (c || '').toString().toLowerCase().trim());
+                if (!row || !Array.isArray(row)) continue;
                 
-                if (rowStr.some(c => c.includes('tên hàng') || c.includes('mã hàng') || c.includes('tổng tiền') || c.includes('thời gian'))) {
+                const rowStr = row.map(c => c == null ? '' : String(c).toLowerCase().trim());
+                if (rowStr.some(c => safeIncludes(c, 'tên hàng') || safeIncludes(c, 'mã hàng') || safeIncludes(c, 'tổng tiền') || safeIncludes(c, 'thời gian'))) {
                     headerRowIndex = i;
                     colMap.item = rowStr.findIndex(c => c === 'tên hàng' || c === 'tên món' || c === 'sản phẩm');
-                    if (colMap.item === -1) colMap.item = rowStr.findIndex(c => c.includes('tên hàng') || c.includes('tên món'));
-                    if (colMap.item === -1) colMap.item = rowStr.findIndex(c => c.includes('mã hàng'));
+                    if (colMap.item === -1) colMap.item = rowStr.findIndex(c => safeIncludes(c, 'tên hàng') || safeIncludes(c, 'tên món'));
+                    if (colMap.item === -1) colMap.item = rowStr.findIndex(c => safeIncludes(c, 'mã hàng'));
                     
                     for (let c = rowStr.length - 1; c >= 0; c--) {
-                        if (rowStr[c] && aliases.revenue.some(alias => rowStr[c].includes(alias))) {
+                        if (rowStr[c] && aliases.revenue.some(alias => safeIncludes(rowStr[c], alias))) {
                             colMap.revenue = c; break;
                         }
                     }
-                    if (colMap.revenue === -1) colMap.revenue = rowStr.findIndex(c => c.includes('tổng tiền') || c.includes('doanh thu'));
+                    if (colMap.revenue === -1) colMap.revenue = rowStr.findIndex(c => safeIncludes(c, 'tổng tiền') || safeIncludes(c, 'doanh thu'));
 
                     colMap.date = rowStr.findIndex(c => c === 'thời gian' || c === 'ngày');
                     colMap.hour = rowStr.findIndex(c => c === 'giờ' || c === 'giờ bán');
@@ -619,7 +618,7 @@
 
             for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
                 const row = jsonData[i];
-                if (!row || row.length === 0) continue;
+                if (!row || !Array.isArray(row) || row.length === 0) continue;
 
                 let dateStr = colMap.date !== -1 ? row[colMap.date] : 'Không rõ';
                 let item = colMap.item !== -1 ? row[colMap.item] : '';
@@ -627,7 +626,7 @@
                 let rawQty = colMap.qty !== -1 ? row[colMap.qty] : 0;
                 let rawRev = colMap.revenue !== -1 ? row[colMap.revenue] : 0;
 
-                if (!item || item.toString().trim() === '' || item.toString().toLowerCase().includes('tổng cộng') || item === '-') continue;
+                if (!item || String(item).trim() === '' || safeIncludes(item, 'tổng cộng') || item === '-') continue;
 
                 let revenue = parseCleanMoney(rawRev);
                 let qty = parseFloat(rawQty) || 0;
@@ -643,7 +642,7 @@
                 } else if (!dateStr) {
                     dateStr = 'Không rõ';
                 } else {
-                    dateStr = dateStr.toString().trim();
+                    dateStr = String(dateStr).trim();
                     let timeMatch = dateStr.match(/(\d{1,2}):(\d{2})/);
                     if (timeMatch) hour = parseInt(timeMatch[1], 10);
                     if (dateStr.includes(' ')) dateStr = dateStr.split(' ')[0];
@@ -658,16 +657,16 @@
                     }
                 }
 
-                platform = platform ? platform.toString() : 'Kênh khác';
+                platform = platform ? String(platform) : 'Kênh khác';
                 const pLower = platform.toLowerCase();
-                if(pLower.includes('grab')) platform = 'Grab';
-                else if(pLower.includes('shopee') || pLower.includes('now')) platform = 'ShopeeFood';
-                else if(pLower.includes('be') || pLower.includes('baemin')) platform = 'BeFood';
-                else if(pLower.includes('xanh') || pLower.includes('sm')) platform = 'Xanh SM';
-                else if(pLower.includes('tại') || pLower.includes('mang')) platform = 'Offline';
+                if(safeIncludes(pLower, 'grab')) platform = 'Grab';
+                else if(safeIncludes(pLower, 'shopee') || safeIncludes(pLower, 'now')) platform = 'ShopeeFood';
+                else if(safeIncludes(pLower, 'be') || safeIncludes(pLower, 'baemin')) platform = 'BeFood';
+                else if(safeIncludes(pLower, 'xanh') || safeIncludes(pLower, 'sm')) platform = 'Xanh SM';
+                else if(safeIncludes(pLower, 'tại') || safeIncludes(pLower, 'mang')) platform = 'Offline';
                 else if (!platform || platform.trim() === '' || platform === '-') platform = 'Kênh khác';
 
-                let baseItem = item.toString().trim();
+                let baseItem = String(item).trim();
                 let size = 'KHÔNG GHI RÕ';
                 const sizeMatch = baseItem.match(/\s*\((S|M|L)\)$/i);
                 if (sizeMatch) {
@@ -678,7 +677,7 @@
                 currentData.push({ 
                     date: dateStr, 
                     hour: hour,
-                    item: item.toString().trim(), 
+                    item: String(item).trim(), 
                     baseItem: baseItem,
                     size: size,
                     platform: platform, 
@@ -955,6 +954,9 @@
                 if(!res.ok) throw new Error("Không thể truy cập file (Hãy đảm bảo Sheet đang ở chế độ 'Bất kỳ ai có liên kết')");
                 
                 const csvText = await res.text();
+                // Bảo vệ chống parse nhầm trang HTML đăng nhập
+                if (safeIncludes(csvText, '<html')) throw new Error("Link không hợp lệ (Vui lòng kiểm tra quyền chia sẻ).");
+
                 const workbook = XLSX.read(csvText, {type: 'string'});
                 const sheet = workbook.Sheets[workbook.SheetNames[0]];
                 const jsonData = XLSX.utils.sheet_to_json(sheet, {header: 1});
@@ -971,23 +973,24 @@
             let headerRow = -1;
             let colItem=-1, colIng=-1, colUnit=-1, colS=-1, colM=-1, colL=-1, colQty=-1, colSize=-1;
             
-            for(let i=0; i<Math.min(10, data.length); i++) {
+            // Quét an toàn chống hố đen (Sparse Array) của Google Sheet
+            for(let i=0; i<Math.min(20, data.length); i++) {
                 const row = data[i];
-                if(!row) continue;
-                // SỬ DỤNG ARRAY.FROM ĐỂ TRÁNH LỖI SPARSE ARRAY CỦA GOOGLE SHEET
-                const rowStr = Array.from(row).map(c => (c||'').toString().toLowerCase().trim());
+                if(!row || !Array.isArray(row)) continue;
                 
-                if(rowStr.some(c => c.includes('món') || c.includes('sản phẩm'))) {
+                const rowStr = row.map(c => c == null ? '' : String(c).toLowerCase().trim());
+                
+                if(rowStr.some(c => safeIncludes(c, 'món') || safeIncludes(c, 'sản phẩm'))) {
                     headerRow = i;
-                    colItem = rowStr.findIndex(c => c === 'tên món' || c === 'tên hàng' || c === 'sản phẩm' || c.includes('món') || c.includes('sản phẩm') || c.includes('tên'));
-                    colIng = rowStr.findIndex(c => c.includes('nguyên liệu') || c.includes('thành phần') || c.includes('vật tư'));
-                    colUnit = rowStr.findIndex(c => c === 'đơn vị' || c === 'đvt' || c.includes('đơn vị'));
+                    colItem = rowStr.findIndex(c => c === 'tên món' || c === 'tên hàng' || c === 'sản phẩm' || safeIncludes(c, 'món') || safeIncludes(c, 'sản phẩm') || safeIncludes(c, 'tên'));
+                    colIng = rowStr.findIndex(c => safeIncludes(c, 'nguyên liệu') || safeIncludes(c, 'thành phần') || safeIncludes(c, 'vật tư'));
+                    colUnit = rowStr.findIndex(c => c === 'đơn vị' || c === 'đvt' || safeIncludes(c, 'đơn vị'));
                     
-                    colS = rowStr.findIndex(c => c === 's' || c === 'size s' || c.includes('(s)') || c.includes('định lượng s') || c.includes('đl s'));
-                    colM = rowStr.findIndex(c => c === 'm' || c === 'size m' || c.includes('(m)') || c.includes('định lượng m') || c.includes('đl m'));
-                    colL = rowStr.findIndex(c => c === 'l' || c === 'size l' || c.includes('(l)') || c.includes('định lượng l') || c.includes('đl l'));
+                    colS = rowStr.findIndex(c => c === 's' || c === 'size s' || safeIncludes(c, '(s)') || safeIncludes(c, 'định lượng s') || safeIncludes(c, 'đl s'));
+                    colM = rowStr.findIndex(c => c === 'm' || c === 'size m' || safeIncludes(c, '(m)') || safeIncludes(c, 'định lượng m') || safeIncludes(c, 'đl m'));
+                    colL = rowStr.findIndex(c => c === 'l' || c === 'size l' || safeIncludes(c, '(l)') || safeIncludes(c, 'định lượng l') || safeIncludes(c, 'đl l'));
                     
-                    colQty = rowStr.findIndex(c => c.includes('định lượng') || c.includes('số lượng') || c.includes('sl') || c.includes('qty') || c.includes('đl'));
+                    colQty = rowStr.findIndex(c => safeIncludes(c, 'định lượng') || safeIncludes(c, 'số lượng') || safeIncludes(c, 'sl') || safeIncludes(c, 'qty') || safeIncludes(c, 'đl'));
                     colSize = rowStr.findIndex(c => c === 'size' || c === 'kích cỡ');
                     break;
                 }
@@ -1002,14 +1005,14 @@
             
             for(let i=headerRow+1; i<data.length; i++) {
                 const row = data[i];
-                if(!row) continue;
+                if(!row || !Array.isArray(row)) continue;
                 
-                let itemName = row[colItem] ? row[colItem].toString().trim() : '';
+                let itemName = row[colItem] ? String(row[colItem]).trim() : '';
                 if(itemName) currentItemName = itemName; 
                 else itemName = currentItemName; 
                 
                 let bomBaseName = itemName;
-                let bomSpecificSize = colSize !== -1 && row[colSize] ? row[colSize].toString().trim().toUpperCase() : '';
+                let bomSpecificSize = colSize !== -1 && row[colSize] ? String(row[colSize]).trim().toUpperCase() : '';
                 
                 const bomSizeMatch = bomBaseName.match(/\s*\((S|M|L)\)$/i);
                 if (bomSizeMatch) {
@@ -1017,8 +1020,8 @@
                     bomBaseName = bomBaseName.replace(/\s*\((S|M|L)\)$/i, '').trim();
                 }
 
-                let ingredient = row[colIng] ? row[colIng].toString().trim() : '';
-                let unit = colUnit !== -1 && row[colUnit] ? row[colUnit].toString().trim() : '';
+                let ingredient = row[colIng] ? String(row[colIng]).trim() : '';
+                let unit = colUnit !== -1 && row[colUnit] ? String(row[colUnit]).trim() : '';
                 
                 if(!ingredient) continue;
                 
@@ -1063,7 +1066,7 @@
                 let recipes = bomDatabase.filter(b => {
                     let bNorm = normalizeForMatch(b.baseItem);
                     if (!bNorm) return false;
-                    return baseNameNorm === bNorm || baseNameNorm.includes(bNorm) || bNorm.includes(baseNameNorm);
+                    return baseNameNorm === bNorm || safeIncludes(baseNameNorm, bNorm) || safeIncludes(bNorm, baseNameNorm);
                 });
                 
                 recipes.forEach(r => {
