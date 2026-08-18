@@ -347,16 +347,21 @@
             return parseFloat(s) || 0;
         }
 
+        // TỐI ƯU HÓA LỘT TRẦN TIẾNG VIỆT & TỰ ĐỘNG BỎ CHỮ "TOPPING" CỦA IPOS
         function normalizeForMatch(str) {
             if (!str) return '';
             let s = String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); 
             s = s.replace(/đ/g, 'd'); 
-            s = s.replace(/[^a-z0-9]/g, ''); 
+            // Đặc trị cho iPOS: Tự lột chữ "topping " ở đầu để khớp với file BOM
+            if (s.startsWith('topping ')) {
+                s = s.substring(8);
+            }
+            s = s.replace(/[^a-z0-9]/g, ''); // Bóp nát khoảng trắng và dấu câu
             return s.trim();
         }
 
         // ==========================================
-        // KHỐI LOGIC AI CHATBOT (TỐI ƯU HÓA NGỮ CẢNH)
+        // KHỐI LOGIC AI CHATBOT
         // ==========================================
         function openApiModal() {
             document.getElementById('apiKeyInput').value = localStorage.getItem('gemini_api_key') || '';
@@ -448,6 +453,7 @@
                 hourSales[row.hour] = (hourSales[row.hour] || 0) + row.qty;
             });
 
+            // TỐI ƯU HÓA NGỮ CẢNH: Rút gọn chỉ số để tránh bị lỗi Quota Limit của Google AI
             const topItems = Object.entries(itemSales).sort((a,b) => b[1] - a[1]).slice(0, 5).map(i => `${i[0]} (${i[1]})`).join(", ");
             const worstItems = Object.entries(itemSales).sort((a,b) => a[1] - b[1]).slice(0, 3).map(i => `${i[0]} (${i[1]})`).join(", ");
             
@@ -512,6 +518,7 @@
                     chatHistory.push({ role: 'ai', text: aiResponseText });
                     appendMessage('ai', aiResponseText);
                 } else {
+                    console.log(result);
                     if(result.error && safeIncludes(result.error.message, "API key not valid")) {
                         appendMessage('ai', "❌ API Key của bạn không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra lại trong phần Cài đặt AI.");
                         localStorage.removeItem('gemini_api_key');
@@ -712,6 +719,7 @@
                 populatePlatformFilter();
                 renderDashboardAndChart();
                 
+                // TỰ ĐỘNG TRIGGER BOM FETCH
                 if (bomDatabase.length === 0) {
                     fetchBOM();
                 } else {
@@ -810,6 +818,7 @@
                             const clickedDate = dates[dataIndex];
                             const clickedItemsData = dateSales[clickedDate].items;
                             showHourlyChartAndTable(clickedDate, clickedItemsData);
+                            
                             if(bomDatabase.length > 0) calculateUsage(clickedItemsData, clickedDate);
                         }
                     },
@@ -948,7 +957,7 @@
         }
 
         // ==========================================
-        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM) SIÊU BỌC THÉP
+        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM) KIÊN CỐ
         // ==========================================
         async function fetchBOM() {
             if(currentData.length === 0) return; 
@@ -989,48 +998,52 @@
             let headerRowIndex = -1;
             let colItem=-1, colIng=-1, colUnit=-1, colS=-1, colM=-1, colL=-1, colQty=-1, colSize=-1;
             
-            // Tìm dòng Header
+            // XÓA BỎ LỖI TÌM SAI CỘT VÌ TÊN NGUYÊN LIỆU CÓ CHỮ TÊN
             for(let i=0; i<Math.min(20, data.length); i++) {
                 const row = data[i];
                 if(!row || typeof row !== 'object') continue;
                 
                 const rowStr = Array.from(row).map(c => c == null ? '' : String(c).toLowerCase().trim());
-                if(rowStr.some(c => safeIncludes(c, 'món') || safeIncludes(c, 'sản phẩm'))) {
+                
+                if(rowStr.some(c => c.includes('món') || c.includes('sản phẩm') || c.includes('hàng') || c.includes('nguyên liệu') || c.includes('thành phần'))) {
                     headerRowIndex = i;
-                    colItem = rowStr.findIndex(c => c === 'tên món' || c === 'tên hàng' || c === 'sản phẩm' || safeIncludes(c, 'món') || safeIncludes(c, 'sản phẩm') || safeIncludes(c, 'tên'));
-                    colIng = rowStr.findIndex(c => safeIncludes(c, 'nguyên liệu') || safeIncludes(c, 'thành phần') || safeIncludes(c, 'vật tư') || safeIncludes(c, 'hàng hóa') || safeIncludes(c, 'vật liệu'));
+                    
+                    // CỘT TÊN MÓN: Né chữ nguyên liệu ra
+                    colItem = rowStr.findIndex(c => c === 'tên món' || c === 'tên hàng' || c === 'sản phẩm' || c === 'món');
+                    if (colItem === -1) {
+                        colItem = rowStr.findIndex(c => (c.includes('tên') || c.includes('món') || c.includes('hàng')) && !c.includes('nguyên liệu') && !c.includes('thành phần'));
+                    }
+
+                    // CỘT NGUYÊN LIỆU / THÀNH PHẦN
+                    colIng = rowStr.findIndex(c => c === 'tên nguyên liệu' || c === 'nguyên liệu' || c === 'thành phần' || c === 'vật tư');
+                    if (colIng === -1) {
+                        colIng = rowStr.findIndex(c => c.includes('nguyên liệu') || c.includes('thành phần') || c.includes('vật tư'));
+                    }
+
+                    // CỘT ĐƠN VỊ TÍNH
+                    colUnit = rowStr.findIndex(c => c === 'đvt' || c === 'đơn vị' || c === 'đơn vị tính' || c === 'đv');
+                    if (colUnit === -1) {
+                        colUnit = rowStr.findIndex(c => c.includes('đơn vị') || c.includes('đvt'));
+                    }
+                    
+                    // CỘT SIZE S, M, L
+                    colS = rowStr.findIndex(c => c === 's' || c === 'size s' || c.includes('(s)') || c.includes('đl s'));
+                    colM = rowStr.findIndex(c => c === 'm' || c === 'size m' || c.includes('(m)') || c.includes('đl m'));
+                    colL = rowStr.findIndex(c => c === 'l' || c === 'size l' || c.includes('(l)') || c.includes('đl l'));
+                    
+                    // CỘT ĐỊNH LƯỢNG CHUNG
+                    colQty = rowStr.findIndex(c => c === 'định lượng' || c === 'số lượng' || c === 'sl' || c === 'qty' || c === 'định mức');
+                    if (colQty === -1) {
+                        colQty = rowStr.findIndex(c => c.includes('định lượng') || c.includes('định mức') || c.includes('khối lượng'));
+                    }
+                    
+                    colSize = rowStr.findIndex(c => c === 'size' || c === 'kích cỡ');
                     break;
                 }
             }
             
-            if(headerRowIndex === -1 || colItem === -1 || colIng === -1) {
+            if(colItem === -1 || colIng === -1) {
                 return updateBomStatus("Cấu trúc file định lượng không đúng (Cần cột Tên món, Thành phần).", "error");
-            }
-
-            // Radar quét 3 tầng: Tìm các cột liên quan tới size và định lượng ở 3 dòng tiếp theo
-            const findColIndex = (keywords) => {
-                for (let offset = 0; offset <= 2; offset++) {
-                    let rIdx = headerRowIndex + offset;
-                    if (rIdx >= data.length) break;
-                    let r = data[rIdx];
-                    if (!r || typeof r !== 'object') continue;
-                    let rStr = Array.from(r).map(c => c == null ? '' : String(c).toLowerCase().trim());
-                    let idx = rStr.findIndex(c => keywords.some(k => c === k || safeIncludes(c, k)));
-                    if (idx !== -1) return idx;
-                }
-                return -1;
-            };
-
-            colUnit = findColIndex(['đơn vị', 'đvt', 'đv']);
-            colS = findColIndex(['size s', '(s)', 'định lượng s', 'đl s', 'nhỏ', 's']);
-            colM = findColIndex(['size m', '(m)', 'định lượng m', 'đl m', 'vừa', 'm']);
-            colL = findColIndex(['size l', '(l)', 'định lượng l', 'đl l', 'lớn', 'l']);
-            colQty = findColIndex(['định lượng', 'định mức', 'số lượng', 'sl', 'qty', 'đl', 'trọng lượng', 'khối lượng', 'mức', 'tiêu hao']);
-            colSize = findColIndex(['size', 'kích cỡ']);
-            
-            // Kế sách cuối cùng: Nếu không tìm thấy cột định lượng, lấy cột liền kề cột ĐVT hoặc cột Nguyên liệu
-            if (colS === -1 && colM === -1 && colL === -1 && colQty === -1) {
-                colQty = colUnit !== -1 ? colUnit + 1 : colIng + 1;
             }
             
             bomDatabase = [];
@@ -1093,6 +1106,7 @@
             });
             
             Object.values(itemQty).forEach(sale => {
+                // Ép khô toàn bộ kí tự để match 100%
                 let baseNameNorm = normalizeForMatch(sale.baseItem);
                 let size = sale.size; 
                 let qtySold = sale.qty;
@@ -1128,8 +1142,7 @@
                             usageMap[key].qty += qtyToUse * qtySold;
                         }
                     });
-                    // Cảnh báo nếu tìm thấy tên món nhưng số lượng công thức bằng 0
-                    if (!hasMatchedSize) missingRecipes.add(sale.baseItem + " (Chưa cấu hình Size/Gram)");
+                    if (!hasMatchedSize) missingRecipes.add(sale.baseItem + " (Có tên nhưng thiếu công thức Size " + size + ")");
                 }
             });
             
@@ -1141,16 +1154,16 @@
             if(missingRecipes.size > 0) {
                 let missingList = Array.from(missingRecipes).join(', ');
                 warningBox.innerHTML = `
-                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-md text-sm text-yellow-800 shadow-sm">
-                        <strong class="font-bold"><i class="fas fa-exclamation-triangle mr-1"></i> Có ${missingRecipes.size} món lọt lưới (Chưa có công thức hoặc sai tên):</strong><br>
-                        <span class="text-xs leading-relaxed">${missingList}</span>
+                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-md text-sm text-yellow-800 shadow-sm mb-4">
+                        <strong class="font-bold"><i class="fas fa-exclamation-triangle mr-1"></i> Cảnh báo: Có ${missingRecipes.size} món lọt lưới (Chưa có công thức hoặc sai tên):</strong><br>
+                        <span class="text-xs leading-relaxed mt-1 block">${missingList}</span>
                     </div>`;
             }
 
             let sortedUsage = Object.values(usageMap).sort((a,b) => b.qty - a.qty);
             
             if(sortedUsage.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500 italic">Chưa có dữ liệu tiêu hao (Gợi ý: Kiểm tra lỗi đánh máy giữa file định lượng và iPOS).</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500 italic">Chưa có dữ liệu tiêu hao. Vui lòng kiểm tra lại file Định Lượng.</td></tr>`;
                 document.getElementById('bomTitle').innerHTML = `<i class="fas fa-boxes text-gray-400 mr-2"></i> Không có dữ liệu - Ngày ${dateStr}`;
                 return;
             }
