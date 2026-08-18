@@ -143,7 +143,7 @@
             </div>
         </section>
 
-        <!-- BOM (CÔNG THỨC & TIÊU HAO) SECTION -->
+        <!-- BOM SECTION -->
         <section id="bomSection" class="glass-card border-t-4 border-t-green-500 rounded-2xl p-6 shadow-sm flex flex-col mb-8 hidden">
             <div class="flex justify-between items-center mb-6">
                 <div>
@@ -153,7 +153,6 @@
             </div>
             
             <div class="flex flex-col sm:flex-row items-center gap-4 mb-2">
-                <!-- Đã hardcode link trực tiếp vào thuộc tính value -->
                 <input type="text" id="bomLinkInput" value="https://docs.google.com/spreadsheets/d/1x1DpN2vZmXXvOt66UQy4XxbOiybQxy8pHHj4NqdpAXE/edit?gid=589025939#gid=589025939" class="flex-grow w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm outline-none bg-gray-50 text-gray-500" readonly>
                 <button onclick="fetchBOM()" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition shadow-md whitespace-nowrap flex items-center justify-center">
                     <i class="fas fa-sync-alt mr-2"></i>Tải lại Định lượng
@@ -306,7 +305,7 @@
         let mainChartInstance = null;
         let detailChartInstance = null;
         let chatHistory = []; 
-        let bomDatabase = []; // Lưu trữ công thức định lượng (BOM)
+        let bomDatabase = []; 
 
         const formatMoney = (amount) => {
             return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -323,7 +322,7 @@
             return parseInt(s, 10) || 0;
         }
 
-        // --- BỌC THÉP: CHUYỂN ĐỔI SỐ LƯỢNG ĐỊNH LƯỢNG (DẤU PHẨY VN) ---
+        // BỌC THÉP CHỐNG LỖI SPARSE ARRAY
         function parseVietnameseFloat(val) {
             if (val === undefined || val === null || val === '') return 0;
             if (typeof val === 'number') return val;
@@ -331,7 +330,6 @@
             return parseFloat(s) || 0;
         }
 
-        // --- BỌC THÉP: CHUẨN HÓA UNICODE TIẾNG VIỆT ---
         function normalizeForMatch(str) {
             if (!str) return '';
             return str.toString()
@@ -590,7 +588,9 @@
             for (let i = 0; i < Math.min(20, jsonData.length); i++) {
                 const row = jsonData[i];
                 if (!row) continue;
-                const rowStr = row.map(c => (c || '').toString().toLowerCase().trim());
+                // BỌC THÉP CHỐNG LỖI ARRAY HOLE (SPARSE ARRAY) TỪ SHEETJS
+                const rowStr = Array.from(row).map(c => (c || '').toString().toLowerCase().trim());
+                
                 if (rowStr.some(c => c.includes('tên hàng') || c.includes('mã hàng') || c.includes('tổng tiền') || c.includes('thời gian'))) {
                     headerRowIndex = i;
                     colMap.item = rowStr.findIndex(c => c === 'tên hàng' || c === 'tên món' || c === 'sản phẩm');
@@ -696,7 +696,7 @@
                 populatePlatformFilter();
                 renderDashboardAndChart();
                 
-                // --- TỰ ĐỘNG TẢI DỮ LIỆU ĐỊNH LƯỢNG NGAY KHI UPLOAD FILE XONG ---
+                // TỰ ĐỘNG TRIGGER BOM FETCH
                 if (bomDatabase.length === 0) {
                     fetchBOM();
                 } else {
@@ -931,7 +931,7 @@
 
         function hideHourlyChart() {
             document.getElementById('hourlyChartContainer').classList.add('hidden');
-            if(bomDatabase.length > 0) calculateUsage(); // Tính lại tổng tất cả các ngày
+            if(bomDatabase.length > 0) calculateUsage(); // Khôi phục tính tổng BOM
         }
 
         // ==========================================
@@ -974,7 +974,8 @@
             for(let i=0; i<Math.min(10, data.length); i++) {
                 const row = data[i];
                 if(!row) continue;
-                const rowStr = row.map(c => (c||'').toString().toLowerCase().trim());
+                // SỬ DỤNG ARRAY.FROM ĐỂ TRÁNH LỖI SPARSE ARRAY CỦA GOOGLE SHEET
+                const rowStr = Array.from(row).map(c => (c||'').toString().toLowerCase().trim());
                 
                 if(rowStr.some(c => c.includes('món') || c.includes('sản phẩm'))) {
                     headerRow = i;
