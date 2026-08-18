@@ -15,9 +15,7 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
         }
-        .stat-icon-bg {
-            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-        }
+        .stat-icon-bg { background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); }
         .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(10px); }
@@ -28,7 +26,6 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
         
-        /* Giao diện Chatbot Bubble */
         .msg-user { background-color: #e0e7ff; color: #1e40af; align-self: flex-end; border-bottom-right-radius: 2px; }
         .msg-ai { background-color: #ffffff; border: 1px solid #e5e7eb; color: #374151; align-self: flex-start; border-bottom-left-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .typing-indicator span { animation: blink 1.4s infinite both; height: 6px; width: 6px; background: #8b5cf6; border-radius: 50%; display: inline-block; margin: 0 1px; }
@@ -36,7 +33,6 @@
         .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
         @keyframes blink { 0% { opacity: 0.2; transform: scale(0.8); } 20% { opacity: 1; transform: scale(1.2); } 100% { opacity: 0.2; transform: scale(0.8); } }
         
-        /* Format Markdown của AI */
         .ai-content strong { color: #111827; }
         .ai-content ul { list-style-type: disc; margin-left: 1.2rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
         .ai-content li { margin-bottom: 0.25rem; }
@@ -71,7 +67,7 @@
         <!-- Upload & Filter -->
         <section class="mb-8 flex flex-col md:flex-row gap-4 items-end justify-between bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div class="w-full md:w-1/2">
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Tải lên File Excel Bán Hàng</label>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Tải lên File Excel Bán Hàng (iPOS)</label>
                 <div class="flex items-center space-x-4">
                     <label class="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 px-5 py-2.5 rounded-xl border border-blue-200 font-medium transition-all shadow-sm flex items-center">
                         <i class="fas fa-file-excel mr-2 text-green-600"></i>
@@ -147,6 +143,44 @@
             </div>
         </section>
 
+        <!-- BOM (CÔNG THỨC & TIÊU HAO) SECTION -->
+        <section id="bomSection" class="glass-card rounded-2xl p-6 shadow-sm flex flex-col mb-8 hidden">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-800">📦 Phân Tích Tiêu Hao Nguyên Liệu (BOM)</h2>
+                    <p class="text-xs text-gray-500 mt-1">Dựa trên file định lượng Google Sheet và dữ liệu bán hàng thực tế đã chọn.</p>
+                </div>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row items-center gap-4 mb-2">
+                <input type="text" id="bomLinkInput" placeholder="Dán link Google Sheet Định lượng (Chứa thành phần S, M, L) vào đây..." class="flex-grow w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm outline-none">
+                <button onclick="fetchBOM()" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition shadow-md whitespace-nowrap flex items-center justify-center">
+                    <i class="fas fa-sync-alt mr-2"></i>Tính Tiêu Hao
+                </button>
+            </div>
+            <div id="bomStatusMessage" class="text-sm mb-4 font-medium transition-opacity hidden"></div>
+            
+            <div id="bomResultContainer" class="hidden border-t border-gray-200 pt-6 mt-2">
+                <h3 class="text-md font-bold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-boxes text-orange-500 mr-2"></i> Tổng Nguyên Liệu Đã Sử Dụng (Cho các đơn hiển thị)
+                </h3>
+                <div class="overflow-x-auto custom-scrollbar max-h-[350px]">
+                    <table class="min-w-full divide-y divide-gray-200 border border-gray-100 rounded-lg">
+                        <thead class="bg-gray-50 sticky top-0 z-10">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tên Nguyên Liệu</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase w-32">Tổng Tiêu Hao</th>
+                                <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-24">Đơn Vị</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bomTableBody" class="bg-white divide-y divide-gray-100 text-sm">
+                            <!-- Dữ liệu BOM đổ vào đây -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
         <!-- Main Workspace -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="col-span-1 lg:col-span-2 flex flex-col gap-8">
@@ -217,15 +251,13 @@
                     </button>
                 </div>
                 
-                <!-- Chat Window -->
                 <div id="chatHistory" class="flex-grow bg-gray-50 p-4 overflow-y-auto custom-scrollbar flex flex-col space-y-4">
                     <div class="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center" id="emptyChatState">
                         <i class="fas fa-comment-dots text-4xl mb-3 text-gray-300"></i>
-                        <p>Dữ liệu đã sẵn sàng.<br>Hãy nhấn "Tóm tắt dữ liệu" hoặc hỏi AI bất kỳ điều gì.</p>
+                        <p>Dữ liệu đã sẵn sàng.<br>Hãy nhấn "Tóm tắt Báo Cáo" hoặc hỏi AI bất kỳ điều gì.</p>
                     </div>
                 </div>
 
-                <!-- Input Area -->
                 <div class="p-4 bg-white border-t border-gray-200">
                     <button id="btnAutoAnalyze" onclick="autoAnalyzeWithAI()" class="w-full mb-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold py-2.5 px-4 border border-indigo-200 rounded-lg shadow-sm transition-colors flex justify-center items-center">
                         <i class="fas fa-bolt text-yellow-500 mr-2"></i> Tóm tắt Báo Cáo Nhanh
@@ -265,7 +297,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Thư viện hiển thị văn bản Markdown cho AI -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <script>
@@ -274,6 +305,7 @@
         let mainChartInstance = null;
         let detailChartInstance = null;
         let chatHistory = []; 
+        let bomDatabase = []; // Lưu trữ công thức định lượng (BOM)
 
         const formatMoney = (amount) => {
             return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -379,7 +411,7 @@
             currentData.forEach(row => {
                 totalRev += row.revenue;
                 totalItems += row.qty;
-                itemSales[row.item] = (itemSales[row.item] || 0) + row.qty;
+                itemSales[row.baseItem] = (itemSales[row.baseItem] || 0) + row.qty;
                 hourSales[row.hour] = (hourSales[row.hour] || 0) + row.qty;
             });
 
@@ -475,10 +507,19 @@
         }
 
         // ==========================================
-        // KHỐI LOGIC ĐỌC FILE VÀ VẼ BIỂU ĐỒ (Giữ nguyên)
+        // KHỐI LOGIC ĐỌC FILE VÀ VẼ BIỂU ĐỒ BÁN HÀNG
         // ==========================================
         function updateStatus(message, type="info") {
             const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = 'mt-2 text-sm font-medium p-2 rounded transition-opacity block';
+            if (type === 'error') statusEl.classList.add('text-red-700', 'bg-red-50', 'border', 'border-red-200');
+            else if (type === 'success') statusEl.classList.add('text-green-700', 'bg-green-50', 'border', 'border-green-200');
+            else statusEl.classList.add('text-blue-700', 'bg-blue-50', 'border', 'border-blue-200');
+        }
+
+        function updateBomStatus(message, type="info") {
+            const statusEl = document.getElementById('bomStatusMessage');
             statusEl.textContent = message;
             statusEl.className = 'mt-2 text-sm font-medium p-2 rounded transition-opacity block';
             if (type === 'error') statusEl.classList.add('text-red-700', 'bg-red-50', 'border', 'border-red-200');
@@ -493,7 +534,8 @@
             updateStatus("Đang đọc file Excel...", "info");
             document.getElementById('fileNameDisplay').textContent = file.name;
             hideHourlyChart();
-            clearChat(); // Xóa lịch sử AI cũ khi tải file mới
+            clearChat();
+            document.getElementById('bomSection').classList.remove('hidden');
 
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -605,7 +647,25 @@
                 else if(pLower.includes('tại') || pLower.includes('mang')) platform = 'Offline';
                 else if (!platform || platform.trim() === '' || platform === '-') platform = 'Kênh khác';
 
-                currentData.push({ date: dateStr, hour: hour, item: item.toString().trim(), platform: platform, qty: qty, revenue: revenue });
+                // Bóc tách Tên Món (Base) và Size
+                let baseItem = item.toString().trim();
+                let size = 'KHÔNG GHI RÕ';
+                const sizeMatch = baseItem.match(/\s*\((S|M|L)\)$/i);
+                if (sizeMatch) {
+                    size = sizeMatch[1].toUpperCase();
+                    baseItem = baseItem.replace(/\s*\((S|M|L)\)$/i, '').trim();
+                }
+
+                currentData.push({ 
+                    date: dateStr, 
+                    hour: hour,
+                    item: item.toString().trim(), 
+                    baseItem: baseItem,
+                    size: size,
+                    platform: platform, 
+                    qty: qty, 
+                    revenue: revenue 
+                });
             }
 
             globalRawData = [...currentData]; 
@@ -636,6 +696,7 @@
             hideHourlyChart();
             renderDashboardAndChart(); 
             clearChat();
+            if(bomDatabase.length > 0) calculateUsage(); // Recalculate BOM if active
         }
 
         function renderDashboardAndChart() {
@@ -650,7 +711,7 @@
                 totalRev += row.revenue;
                 totalItems += row.qty;
                 platformSales[row.platform] = (platformSales[row.platform] || 0) + row.revenue;
-                itemSales[row.item] = (itemSales[row.item] || 0) + row.qty;
+                itemSales[row.baseItem] = (itemSales[row.baseItem] || 0) + row.qty; // Dùng baseItem cho KPI
 
                 if (!dateSales[row.date]) dateSales[row.date] = { total: 0, items: [] };
                 dateSales[row.date].total += row.revenue;
@@ -839,6 +900,163 @@
 
         function hideHourlyChart() {
             document.getElementById('hourlyChartContainer').classList.add('hidden');
+        }
+
+        // ==========================================
+        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM)
+        // ==========================================
+        async function fetchBOM() {
+            if(currentData.length === 0) return alert("Vui lòng tải File Bán Hàng iPOS trước khi tính tiêu hao!");
+            
+            const link = document.getElementById('bomLinkInput').value.trim();
+            if(!link) return alert("Vui lòng nhập link Google Sheet!");
+            
+            const match = link.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            if(!match) return alert("Link Google Sheet không hợp lệ!");
+            
+            const id = match[1];
+            // Sử dụng endpoint gviz để vượt lỗi CORS khi tải từ Client
+            const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`;
+            
+            try {
+                updateBomStatus("Đang tải dữ liệu định lượng từ Google Sheet...", "info");
+                const res = await fetch(url);
+                if(!res.ok) throw new Error("Không thể tải file (Có thể do quyền truy cập chưa được mở công khai)");
+                
+                const csvText = await res.text();
+                // SheetJS có thể đọc trực tiếp chuỗi CSV
+                const workbook = XLSX.read(csvText, {type: 'string'});
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(sheet, {header: 1});
+                
+                parseBOMData(jsonData);
+            } catch(err) {
+                updateBomStatus("Lỗi tải định lượng: " + err.message + ". Đảm bảo Link Sheet đã bật quyền 'Bất kỳ ai có liên kết'.", "error");
+            }
+        }
+
+        function parseBOMData(data) {
+            if(data.length < 2) return updateBomStatus("File định lượng trống!", "error");
+            
+            let headerRow = -1;
+            let colItem=-1, colIng=-1, colUnit=-1, colS=-1, colM=-1, colL=-1, colQty=-1, colSize=-1;
+            
+            for(let i=0; i<Math.min(10, data.length); i++) {
+                const row = data[i];
+                if(!row) continue;
+                const rowStr = row.map(c => (c||'').toString().toLowerCase().trim());
+                
+                if(rowStr.some(c => c.includes('món') || c.includes('sản phẩm'))) {
+                    headerRow = i;
+                    colItem = rowStr.findIndex(c => c.includes('món') || c.includes('sản phẩm') || c.includes('tên'));
+                    colIng = rowStr.findIndex(c => c.includes('nguyên liệu') || c.includes('thành phần'));
+                    colUnit = rowStr.findIndex(c => c === 'đơn vị' || c === 'đvt');
+                    
+                    colS = rowStr.findIndex(c => c === 'size s' || c === 's' || c === 'định lượng s');
+                    colM = rowStr.findIndex(c => c === 'size m' || c === 'm' || c === 'định lượng m');
+                    colL = rowStr.findIndex(c => c === 'size l' || c === 'l' || c === 'định lượng l');
+                    
+                    colQty = rowStr.findIndex(c => c === 'định lượng' || c === 'số lượng');
+                    colSize = rowStr.findIndex(c => c === 'size' || c === 'kích cỡ');
+                    break;
+                }
+            }
+            
+            if(colItem === -1 || colIng === -1) {
+                return updateBomStatus("Cấu trúc file định lượng không đúng (Cần cột Tên món, Thành phần).", "error");
+            }
+            
+            bomDatabase = [];
+            let currentItemName = '';
+            
+            for(let i=headerRow+1; i<data.length; i++) {
+                const row = data[i];
+                if(!row) continue;
+                
+                let itemName = row[colItem] ? row[colItem].toString().trim() : '';
+                if(itemName) currentItemName = itemName; 
+                else itemName = currentItemName; // Xử lý gộp ô (Merge cells)
+                
+                let ingredient = row[colIng] ? row[colIng].toString().trim() : '';
+                let unit = colUnit !== -1 && row[colUnit] ? row[colUnit].toString().trim() : '';
+                
+                if(!ingredient) continue;
+                
+                let qtyS = colS !== -1 ? parseFloat(row[colS]) || 0 : 0;
+                let qtyM = colM !== -1 ? parseFloat(row[colM]) || 0 : 0;
+                let qtyL = colL !== -1 ? parseFloat(row[colL]) || 0 : 0;
+                
+                let defaultQty = colQty !== -1 ? parseFloat(row[colQty]) || 0 : 0;
+                let specificSize = colSize !== -1 && row[colSize] ? row[colSize].toString().trim().toUpperCase() : '';
+                
+                bomDatabase.push({
+                    item: itemName.toLowerCase(),
+                    ingredient: ingredient,
+                    unit: unit,
+                    s: qtyS, m: qtyM, l: qtyL,
+                    defaultQty: defaultQty,
+                    specificSize: specificSize
+                });
+            }
+            
+            updateBomStatus(`Đã tải định lượng thành công cho ${new Set(bomDatabase.map(b=>b.item)).size} món!`, "success");
+            calculateUsage();
+        }
+
+        function calculateUsage() {
+            if(currentData.length === 0 || bomDatabase.length === 0) return;
+            
+            document.getElementById('bomResultContainer').classList.remove('hidden');
+            let usageMap = {}; 
+            
+            currentData.forEach(sale => {
+                let baseName = sale.baseItem.toLowerCase();
+                let size = sale.size; // 'S', 'M', 'L', 'KHÔNG GHI RÕ'
+                let qtySold = sale.qty;
+                
+                // Lọc các công thức có tên món khớp với tên gốc
+                let recipes = bomDatabase.filter(b => baseName === b.item || baseName.includes(b.item) || b.item.includes(baseName));
+                
+                recipes.forEach(r => {
+                    let qtyToUse = 0;
+                    
+                    if(r.specificSize) {
+                        if(r.specificSize === size) qtyToUse = r.defaultQty;
+                    } else {
+                        if(size === 'S' && r.s > 0) qtyToUse = r.s;
+                        else if(size === 'M' && r.m > 0) qtyToUse = r.m;
+                        else if(size === 'L' && r.l > 0) qtyToUse = r.l;
+                        else if(r.defaultQty > 0) qtyToUse = r.defaultQty; 
+                        else qtyToUse = r.m > 0 ? r.m : (r.s > 0 ? r.s : r.l); // Fallback lấy đại 1 size nếu không ghi rõ
+                    }
+                    
+                    if(qtyToUse > 0) {
+                        let key = r.ingredient + '|' + r.unit;
+                        if(!usageMap[key]) usageMap[key] = { name: r.ingredient, unit: r.unit, qty: 0 };
+                        usageMap[key].qty += qtyToUse * qtySold;
+                    }
+                });
+            });
+            
+            const tbody = document.getElementById('bomTableBody');
+            tbody.innerHTML = '';
+            
+            let sortedUsage = Object.values(usageMap).sort((a,b) => b.qty - a.qty);
+            
+            if(sortedUsage.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500 italic">Chưa có dữ liệu tiêu hao (Tên món bán ra và tên trong file Định lượng không khớp nhau).</td></tr>`;
+                return;
+            }
+            
+            sortedUsage.forEach(u => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-green-50 transition-colors">
+                        <td class="px-4 py-3 font-medium text-gray-800">${u.name}</td>
+                        <td class="px-4 py-3 text-right font-bold text-green-600 text-base">${u.qty.toLocaleString('vi-VN', {maximumFractionDigits: 2})}</td>
+                        <td class="px-4 py-3 text-center text-gray-500">${u.unit}</td>
+                    </tr>
+                `;
+            });
         }
     </script>
 </body>
