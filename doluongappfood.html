@@ -161,7 +161,7 @@
             <div id="bomStatusMessage" class="text-sm mb-4 font-medium transition-opacity hidden"></div>
             
             <div id="bomResultContainer" class="hidden border-t border-gray-200 pt-6 mt-2">
-                <!-- Khu vực hiển thị cảnh báo món thiếu công thức -->
+                <!-- Khu vực cảnh báo -->
                 <div id="bomMissingWarning" class="mb-4"></div>
                 
                 <h3 id="bomTitle" class="text-md font-bold text-gray-800 mb-4 flex items-center">
@@ -325,43 +325,38 @@
             return parseInt(s, 10) || 0;
         }
 
-        // HÀM AN TOÀN CHỐNG LỖI UNDEFINED CỦA TRÌNH DUYỆT
         function safeIncludes(str, search) {
             if (str === null || str === undefined) return false;
             return String(str).toLowerCase().includes(String(search).toLowerCase());
         }
 
-        // BỌC THÉP CHỐNG LỖI SỐ LIỆU ĐỊNH LƯỢNG (Ví dụ: 0,05)
         function parseVietnameseFloat(val) {
             if (val === undefined || val === null || val === '') return 0;
             if (typeof val === 'number') return val;
-            
             let s = String(val).trim().replace(/\s/g, '');
-            // Xử lý thông minh dấu phẩy và chấm
             if (s.includes(',') && s.includes('.')) {
                 if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
-                    s = s.replace(/\./g, '').replace(',', '.'); // 1.000,50 -> 1000.50
+                    s = s.replace(/\./g, '').replace(',', '.'); 
                 } else {
-                    s = s.replace(/,/g, ''); // 1,000.50 -> 1000.50
+                    s = s.replace(/,/g, ''); 
                 }
             } else if (s.includes(',')) {
-                s = s.replace(/,/g, '.'); // 0,05 -> 0.05
+                s = s.replace(/,/g, '.'); 
             }
             s = s.replace(/[^\d.-]/g, '');
             return parseFloat(s) || 0;
         }
 
-        // BỌC THÉP TỐI ĐA: LỘT TRẦN TIẾNG VIỆT, XÓA MỌI KHOẢNG TRẮNG ĐỂ ÉP KHỚP MÓN
         function normalizeForMatch(str) {
             if (!str) return '';
             let s = String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); 
             s = s.replace(/đ/g, 'd'); 
-            s = s.replace(/[^a-z0-9]/g, ''); // Xóa sạch sành sanh mọi dấu câu và khoảng trắng
+            s = s.replace(/[^a-z0-9]/g, ''); 
             return s.trim();
         }
 
         // ==========================================
-        // KHỐI LOGIC AI CHATBOT
+        // KHỐI LOGIC AI CHATBOT (TỐI ƯU HÓA NGỮ CẢNH)
         // ==========================================
         function openApiModal() {
             document.getElementById('apiKeyInput').value = localStorage.getItem('gemini_api_key') || '';
@@ -453,7 +448,6 @@
                 hourSales[row.hour] = (hourSales[row.hour] || 0) + row.qty;
             });
 
-            // TỐI ƯU HÓA NGỮ CẢNH: Rút gọn chỉ số để tránh bị lỗi Quota Limit của Google AI
             const topItems = Object.entries(itemSales).sort((a,b) => b[1] - a[1]).slice(0, 5).map(i => `${i[0]} (${i[1]})`).join(", ");
             const worstItems = Object.entries(itemSales).sort((a,b) => a[1] - b[1]).slice(0, 3).map(i => `${i[0]} (${i[1]})`).join(", ");
             
@@ -492,7 +486,7 @@
             if (chatHistory.length === 0) {
                 contents.push({ role: "user", parts: [{ text: systemContext + "\n\nCâu hỏi: " + userText }]});
             } else {
-                const recentHistory = chatHistory.slice(-4); // Chỉ giữ 4 tin gần nhất để không sập API
+                const recentHistory = chatHistory.slice(-4); 
                 contents = recentHistory.map(msg => ({
                     role: msg.role === 'user' ? 'user' : 'model',
                     parts: [{ text: msg.text }]
@@ -518,7 +512,6 @@
                     chatHistory.push({ role: 'ai', text: aiResponseText });
                     appendMessage('ai', aiResponseText);
                 } else {
-                    console.log(result);
                     if(result.error && safeIncludes(result.error.message, "API key not valid")) {
                         appendMessage('ai', "❌ API Key của bạn không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra lại trong phần Cài đặt AI.");
                         localStorage.removeItem('gemini_api_key');
@@ -544,7 +537,7 @@
         function autoAnalyzeWithAI() {
             if (currentData.length === 0) return;
             clearChat();
-            const prompt = "Dựa vào bối cảnh dữ liệu trên, hãy viết một báo cáo phân tích hiệu quả kinh doanh nhanh gọn và đề xuất ngay 3 hành động cụ thể để cải thiện doanh thu (Upsell, Vận hành, Khuyến mãi).";
+            const prompt = "Hãy viết một báo cáo phân tích hiệu quả kinh doanh nhanh gọn và đề xuất ngay 3 hành động cụ thể để cải thiện doanh thu (Upsell, Vận hành, Khuyến mãi).";
             callGeminiAPI(prompt);
         }
 
@@ -719,7 +712,6 @@
                 populatePlatformFilter();
                 renderDashboardAndChart();
                 
-                // TỰ ĐỘNG TRIGGER BOM FETCH
                 if (bomDatabase.length === 0) {
                     fetchBOM();
                 } else {
@@ -745,7 +737,7 @@
             hideHourlyChart();
             renderDashboardAndChart(); 
             clearChat();
-            if(bomDatabase.length > 0) calculateUsage(); // Tính lại BOM theo All
+            if(bomDatabase.length > 0) calculateUsage(); 
         }
 
         function renderDashboardAndChart() {
@@ -818,8 +810,6 @@
                             const clickedDate = dates[dataIndex];
                             const clickedItemsData = dateSales[clickedDate].items;
                             showHourlyChartAndTable(clickedDate, clickedItemsData);
-                            
-                            // Gọi hàm BOM cho ngày được chọn (Tính tiêu hao riêng cho ngày đó)
                             if(bomDatabase.length > 0) calculateUsage(clickedItemsData, clickedDate);
                         }
                     },
@@ -958,7 +948,7 @@
         }
 
         // ==========================================
-        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM)
+        // KHỐI LOGIC TÍNH TIÊU HAO NGUYÊN LIỆU (BOM) SIÊU BỌC THÉP
         // ==========================================
         async function fetchBOM() {
             if(currentData.length === 0) return; 
@@ -996,41 +986,57 @@
         function parseBOMData(data) {
             if(data.length < 2) return updateBomStatus("File định lượng trống!", "error");
             
-            let headerRow = -1;
+            let headerRowIndex = -1;
             let colItem=-1, colIng=-1, colUnit=-1, colS=-1, colM=-1, colL=-1, colQty=-1, colSize=-1;
             
-            // XÓA BỎ LỖI SPARSE ARRAY CỦA GOOGLE SHEET BẰNG ARRAY.FROM
+            // Tìm dòng Header
             for(let i=0; i<Math.min(20, data.length); i++) {
                 const row = data[i];
                 if(!row || typeof row !== 'object') continue;
                 
-                // Lấp đầy các ô trống bằng chuỗi rỗng để lệnh safeIncludes không bị lỗi sập mạng
                 const rowStr = Array.from(row).map(c => c == null ? '' : String(c).toLowerCase().trim());
-                
                 if(rowStr.some(c => safeIncludes(c, 'món') || safeIncludes(c, 'sản phẩm'))) {
-                    headerRow = i;
+                    headerRowIndex = i;
                     colItem = rowStr.findIndex(c => c === 'tên món' || c === 'tên hàng' || c === 'sản phẩm' || safeIncludes(c, 'món') || safeIncludes(c, 'sản phẩm') || safeIncludes(c, 'tên'));
                     colIng = rowStr.findIndex(c => safeIncludes(c, 'nguyên liệu') || safeIncludes(c, 'thành phần') || safeIncludes(c, 'vật tư') || safeIncludes(c, 'hàng hóa') || safeIncludes(c, 'vật liệu'));
-                    colUnit = rowStr.findIndex(c => c === 'đơn vị' || c === 'đvt' || safeIncludes(c, 'đơn vị') || safeIncludes(c, 'đv'));
-                    
-                    colS = rowStr.findIndex(c => c === 's' || safeIncludes(c, 'size s') || safeIncludes(c, '(s)') || safeIncludes(c, 'định lượng s') || safeIncludes(c, 'đl s') || String(c).endsWith(' s') || safeIncludes(c, 'nhỏ'));
-                    colM = rowStr.findIndex(c => c === 'm' || safeIncludes(c, 'size m') || safeIncludes(c, '(m)') || safeIncludes(c, 'định lượng m') || safeIncludes(c, 'đl m') || String(c).endsWith(' m') || safeIncludes(c, 'vừa'));
-                    colL = rowStr.findIndex(c => c === 'l' || safeIncludes(c, 'size l') || safeIncludes(c, '(l)') || safeIncludes(c, 'định lượng l') || safeIncludes(c, 'đl l') || String(c).endsWith(' l') || safeIncludes(c, 'lớn'));
-                    
-                    colQty = rowStr.findIndex(c => safeIncludes(c, 'định lượng') || safeIncludes(c, 'định mức') || safeIncludes(c, 'số lượng') || safeIncludes(c, 'sl') || safeIncludes(c, 'qty') || safeIncludes(c, 'đl') || safeIncludes(c, 'trọng lượng') || safeIncludes(c, 'khối lượng') || safeIncludes(c, 'mức') || safeIncludes(c, 'tiêu hao'));
-                    colSize = rowStr.findIndex(c => c === 'size' || c === 'kích cỡ');
                     break;
                 }
             }
             
-            if(colItem === -1 || colIng === -1) {
+            if(headerRowIndex === -1 || colItem === -1 || colIng === -1) {
                 return updateBomStatus("Cấu trúc file định lượng không đúng (Cần cột Tên món, Thành phần).", "error");
+            }
+
+            // Radar quét 3 tầng: Tìm các cột liên quan tới size và định lượng ở 3 dòng tiếp theo
+            const findColIndex = (keywords) => {
+                for (let offset = 0; offset <= 2; offset++) {
+                    let rIdx = headerRowIndex + offset;
+                    if (rIdx >= data.length) break;
+                    let r = data[rIdx];
+                    if (!r || typeof r !== 'object') continue;
+                    let rStr = Array.from(r).map(c => c == null ? '' : String(c).toLowerCase().trim());
+                    let idx = rStr.findIndex(c => keywords.some(k => c === k || safeIncludes(c, k)));
+                    if (idx !== -1) return idx;
+                }
+                return -1;
+            };
+
+            colUnit = findColIndex(['đơn vị', 'đvt', 'đv']);
+            colS = findColIndex(['size s', '(s)', 'định lượng s', 'đl s', 'nhỏ', 's']);
+            colM = findColIndex(['size m', '(m)', 'định lượng m', 'đl m', 'vừa', 'm']);
+            colL = findColIndex(['size l', '(l)', 'định lượng l', 'đl l', 'lớn', 'l']);
+            colQty = findColIndex(['định lượng', 'định mức', 'số lượng', 'sl', 'qty', 'đl', 'trọng lượng', 'khối lượng', 'mức', 'tiêu hao']);
+            colSize = findColIndex(['size', 'kích cỡ']);
+            
+            // Kế sách cuối cùng: Nếu không tìm thấy cột định lượng, lấy cột liền kề cột ĐVT hoặc cột Nguyên liệu
+            if (colS === -1 && colM === -1 && colL === -1 && colQty === -1) {
+                colQty = colUnit !== -1 ? colUnit + 1 : colIng + 1;
             }
             
             bomDatabase = [];
             let currentItemName = '';
             
-            for(let i=headerRow+1; i<data.length; i++) {
+            for(let i=headerRowIndex+1; i<data.length; i++) {
                 const row = data[i];
                 if(!row || typeof row !== 'object') continue;
                 
@@ -1091,7 +1097,6 @@
                 let size = sale.size; 
                 let qtySold = sale.qty;
                 
-                // Thuật toán đối chiếu tên món BỌC THÉP TỐI ĐA
                 let recipes = bomDatabase.filter(b => {
                     let bNorm = normalizeForMatch(b.baseItem);
                     if (!bNorm) return false;
@@ -1101,6 +1106,7 @@
                 if (recipes.length === 0) {
                     missingRecipes.add(sale.baseItem);
                 } else {
+                    let hasMatchedSize = false;
                     recipes.forEach(r => {
                         if (r.specificSize && r.specificSize !== size && size !== 'KHÔNG GHI RÕ') return;
 
@@ -1116,11 +1122,14 @@
                         }
                         
                         if(qtyToUse > 0) {
+                            hasMatchedSize = true;
                             let key = r.ingredient + '|' + r.unit;
                             if(!usageMap[key]) usageMap[key] = { name: r.ingredient, unit: r.unit, qty: 0 };
                             usageMap[key].qty += qtyToUse * qtySold;
                         }
                     });
+                    // Cảnh báo nếu tìm thấy tên món nhưng số lượng công thức bằng 0
+                    if (!hasMatchedSize) missingRecipes.add(sale.baseItem + " (Chưa cấu hình Size/Gram)");
                 }
             });
             
@@ -1129,12 +1138,11 @@
             tbody.innerHTML = '';
             warningBox.innerHTML = '';
             
-            // Xử lý Cảnh báo món lọt lưới
             if(missingRecipes.size > 0) {
                 let missingList = Array.from(missingRecipes).join(', ');
                 warningBox.innerHTML = `
                     <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-md text-sm text-yellow-800 shadow-sm">
-                        <strong class="font-bold"><i class="fas fa-exclamation-triangle mr-1"></i> Có món bị lọt lưới (Chưa có công thức / Sai tên):</strong><br>
+                        <strong class="font-bold"><i class="fas fa-exclamation-triangle mr-1"></i> Có ${missingRecipes.size} món lọt lưới (Chưa có công thức hoặc sai tên):</strong><br>
                         <span class="text-xs leading-relaxed">${missingList}</span>
                     </div>`;
             }
